@@ -1,0 +1,8 @@
+streamlit
+anthropic
+google-generativeai
+beautifulsoup4
+requests
+python-dotenv
+selenium
+webdriver-manager
