@@ -1,9 +1,12 @@
 import os
-from google import genai
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Configure Gemini API
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 
 def generate_sns_posts_streaming(article_text: str, article_title: str = ""):
@@ -62,9 +65,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 
 게시물만 작성 (설명 없이):"""
 
-        x_english_response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=x_english_prompt
+        x_english_response = model.generate_content(x_english_prompt
         )
 
         yield {"platform": "x", "language": "english", "status": "completed", "content": x_english_response.text.strip()}
@@ -89,9 +90,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 
 게시물만 작성 (설명 없이):"""
 
-        x_korean_response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=x_korean_prompt
+        x_korean_response = model.generate_content(x_korean_prompt
         )
 
         yield {"platform": "x", "language": "korean", "status": "completed", "content": x_korean_response.text.strip()}
@@ -121,9 +120,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 
 게시물만 작성:"""
 
-        instagram_english_response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=instagram_english_prompt
+        instagram_english_response = model.generate_content(instagram_english_prompt
         )
 
         yield {"platform": "instagram", "language": "english", "status": "completed", "content": instagram_english_response.text.strip()}
@@ -153,9 +150,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 
 게시물만 작성:"""
 
-        instagram_korean_response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=instagram_korean_prompt
+        instagram_korean_response = model.generate_content(instagram_korean_prompt
         )
 
         yield {"platform": "instagram", "language": "korean", "status": "completed", "content": instagram_korean_response.text.strip()}
@@ -180,9 +175,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 
 게시물만 작성:"""
 
-        threads_english_response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=threads_english_prompt
+        threads_english_response = model.generate_content(threads_english_prompt
         )
 
         yield {"platform": "threads", "language": "english", "status": "completed", "content": threads_english_response.text.strip()}
@@ -207,9 +200,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 
 게시물만 작성:"""
 
-        threads_korean_response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=threads_korean_prompt
+        threads_korean_response = model.generate_content(threads_korean_prompt
         )
 
         yield {"platform": "threads", "language": "korean", "status": "completed", "content": threads_korean_response.text.strip()}
@@ -268,9 +259,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 
 게시물만 작성 (설명 없이):"""
 
-        x_response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=x_prompt
+        x_response = model.generate_content(x_prompt
         )
 
         # Instagram 게시물 생성
@@ -296,9 +285,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 
 게시물만 작성:"""
 
-        instagram_response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=instagram_prompt
+        instagram_response = model.generate_content(instagram_prompt
         )
 
         # Threads 게시물 생성
@@ -319,9 +306,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 
 게시물만 작성:"""
 
-        threads_response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=threads_prompt
+        threads_response = model.generate_content(threads_prompt
         )
 
         return {
