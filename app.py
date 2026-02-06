@@ -85,6 +85,8 @@ if 'article_title' not in st.session_state:
     st.session_state.article_title = ""
 if 'article_content' not in st.session_state:
     st.session_state.article_content = ""
+if 'site_name' not in st.session_state:
+    st.session_state.site_name = "해당 매체"
 if 'auto_generate' not in st.session_state:
     st.session_state.auto_generate = False
 if 'generation_count' not in st.session_state:
@@ -101,8 +103,8 @@ if 'generation_status' not in st.session_state:
     }
 
 # 타이틀
-st.title("🌐 Tenasia Global Viralizer")
-st.markdown("K-엔터 기사를 글로벌 바이럴 SNS 콘텐츠로 변환하세요")
+st.title("🌐 Global Viralizer")
+st.markdown("K-엔터 기사를 글로벌 바이럴 SNS 콘텐츠로 변환하세요 (텐아시아 · 한국경제)")
 
 # 사이드바에 정보 표시
 with st.sidebar:
@@ -113,9 +115,9 @@ with st.sidebar:
 
     st.markdown("""
     **방법 1: URL 입력** ⚡
-    1. 텐아시아 기사 URL 입력
+    1. 텐아시아/한국경제 기사 URL 입력
     2. 'Extract' 버튼 클릭
-    3. 자동으로 기사 추출 및 생성
+    3. 자동으로 출처 인식 및 게시물 생성
 
     **방법 2: 직접 입력** ✍️
     1. 기사 내용 붙여넣기
@@ -125,6 +127,10 @@ with st.sidebar:
     - 🌐 English / 🇰🇷 Korean 탭 전환
     - 📋 코드 블록에서 복사
     - X, Instagram, Threads 각 6개 생성
+
+    **지원 언론사** 📰
+    - 📰 **텐아시아** (tenasia.co.kr)
+    - 💼 **한국경제** (hankyung.com)
     """)
 
     st.divider()
@@ -151,9 +157,9 @@ with col1:
     # URL 입력 섹션
     st.markdown("##### 방법 1: URL에서 자동 추출")
     article_url = st.text_input(
-        "텐아시아 기사 URL",
-        placeholder="https://www.tenasia.co.kr/article/...",
-        help="텐아시아 기사 URL을 입력하면 자동으로 내용을 추출합니다"
+        "기사 URL",
+        placeholder="https://www.tenasia.co.kr/article/... 또는 https://www.hankyung.com/...",
+        help="텐아시아 또는 한국경제 기사 URL을 입력하면 자동으로 출처와 내용을 추출합니다"
     )
 
     extract_button = st.button("📥 Extract Article", type="secondary", use_container_width=True)
@@ -201,11 +207,13 @@ if extract_button:
         if result["success"]:
             with col1:
                 st.success(f"✅ 기사 추출 완료!")
+                st.info(f"**출처:** {result['site_name']}")
                 st.info(f"**제목:** {result['title'][:100]}...")
 
             # 세션 상태 업데이트
             st.session_state.article_title = result['title']
             st.session_state.article_content = result['content']
+            st.session_state.site_name = result['site_name']
             st.session_state.auto_generate = True  # 자동 생성 플래그 설정
 
             # 페이지 새로고침
@@ -224,10 +232,12 @@ if st.session_state.auto_generate:
     st.session_state.auto_generate = False
     content_to_use = st.session_state.article_content
     title_to_use = st.session_state.article_title
+    site_name_to_use = st.session_state.site_name
 else:
     # 수동 생성의 경우 입력 필드 값 사용
     content_to_use = article_content
     title_to_use = article_title
+    site_name_to_use = st.session_state.get('site_name', '해당 매체')
 
 # 생성 실행
 if should_generate and content_to_use.strip():
@@ -275,7 +285,7 @@ if should_generate and content_to_use.strip():
 
         try:
             # 스트리밍 방식으로 생성
-            for update in generate_sns_posts_streaming(content_to_use, title_to_use):
+            for update in generate_sns_posts_streaming(content_to_use, title_to_use, site_name_to_use):
                 platform = update["platform"]
                 status = update["status"]
                 language = update.get("language")

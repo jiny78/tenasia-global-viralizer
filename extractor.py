@@ -1,5 +1,42 @@
 import requests
 from typing import Dict, Optional
+from urllib.parse import urlparse
+
+
+def get_site_name(url: str) -> str:
+    """
+    URL에서 사이트 이름을 추출합니다.
+
+    Args:
+        url: 기사 URL
+
+    Returns:
+        사이트 이름 (한글)
+    """
+    # 지원 언론사 도메인 매핑
+    site_mapping = {
+        "tenasia.co.kr": "텐아시아",
+        "hankyung.com": "한국경제"
+    }
+
+    try:
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc.lower()
+
+        # www. 제거
+        if domain.startswith("www."):
+            domain = domain[4:]
+
+        # 도메인 매핑에서 찾기
+        for key, name in site_mapping.items():
+            if key in domain:
+                return name
+
+        # 지원하지 않는 사이트
+        return None
+
+    except Exception:
+        return None
 
 
 def extract_article(url: str) -> Dict[str, Optional[str]]:
@@ -10,15 +47,29 @@ def extract_article(url: str) -> Dict[str, Optional[str]]:
         url: 기사 URL
 
     Returns:
-        제목과 본문을 담은 딕셔너리
+        제목, 본문, 사이트 이름을 담은 딕셔너리
         {
             "success": bool,
             "title": str or None,
             "content": str or None,
+            "site_name": str or None,
             "error": str or None
         }
     """
     try:
+        # URL에서 사이트 이름 추출
+        site_name = get_site_name(url)
+
+        # 지원하지 않는 사이트인 경우
+        if site_name is None:
+            return {
+                "success": False,
+                "title": None,
+                "content": None,
+                "site_name": None,
+                "error": "지원하지 않는 언론사입니다. 현재 텐아시아와 한국경제만 지원합니다."
+            }
+
         # Jina Reader API 사용
         jina_url = f"https://r.jina.ai/{url}"
 
@@ -31,6 +82,7 @@ def extract_article(url: str) -> Dict[str, Optional[str]]:
                 "success": False,
                 "title": None,
                 "content": None,
+                "site_name": site_name,
                 "error": f"HTTP {response.status_code}: 기사를 가져올 수 없습니다."
             }
 
@@ -43,6 +95,7 @@ def extract_article(url: str) -> Dict[str, Optional[str]]:
                 "success": False,
                 "title": None,
                 "content": None,
+                "site_name": site_name,
                 "error": "추출된 내용이 너무 짧습니다. URL을 확인해주세요."
             }
 
@@ -55,6 +108,7 @@ def extract_article(url: str) -> Dict[str, Optional[str]]:
             "success": True,
             "title": title,
             "content": content,
+            "site_name": site_name,
             "error": None
         }
 
@@ -63,6 +117,7 @@ def extract_article(url: str) -> Dict[str, Optional[str]]:
             "success": False,
             "title": None,
             "content": None,
+            "site_name": None,
             "error": "요청 시간이 초과되었습니다. 다시 시도해주세요."
         }
 
@@ -71,6 +126,7 @@ def extract_article(url: str) -> Dict[str, Optional[str]]:
             "success": False,
             "title": None,
             "content": None,
+            "site_name": None,
             "error": f"네트워크 오류: {str(e)}"
         }
 
@@ -79,6 +135,7 @@ def extract_article(url: str) -> Dict[str, Optional[str]]:
             "success": False,
             "title": None,
             "content": None,
+            "site_name": None,
             "error": f"추출 중 오류 발생: {str(e)}"
         }
 

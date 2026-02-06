@@ -9,7 +9,7 @@ load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 
-def generate_sns_posts_streaming(article_text: str, article_title: str = ""):
+def generate_sns_posts_streaming(article_text: str, article_title: str = "", site_name: str = "해당 매체"):
     """
     한국어 기사를 받아 English와 Korean 버전의 SNS 게시물을 스트리밍 방식으로 생성합니다.
     각 플랫폼이 완료될 때마다 yield로 반환합니다.
@@ -17,6 +17,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = ""):
     Args:
         article_text: 한국어 기사 내용
         article_title: 한국어 기사 제목 (선택)
+        site_name: 출처 사이트 이름 (선택, 기본값: "해당 매체")
 
     Yields:
         각 플랫폼/언어별 결과를 담은 딕셔너리
@@ -34,7 +35,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = ""):
 Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way..., not me..., bestie, main character energy 등"""
 
         # Korean 페르소나
-        korean_instruction = """당신은 대한민국 최고의 연예 매체 텐아시아의 베테랑 SNS 에디터입니다.
+        korean_instruction = f"""당신은 대한민국 최고의 연예 매체 {site_name}의 베테랑 SNS 에디터입니다.
 국내 커뮤니티에서 화제가 될 법한 유머러스하거나 핵심을 찌르는 문구로 팬들의 공감을 이끌어내세요.
 기사의 팩트를 유지하되, SNS에 최적화된 친근하고 감각적인 한국어 표현을 사용하세요."""
 
@@ -84,9 +85,9 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 - 2-3문장 이내로 짧고 강렬하게
 - 국내 커뮤니티에서 화제가 될 법한 Hook으로 시작
 - 적절한 '짤' 설명 포함 (예: "이 표정 실화냐", "미쳤다 진짜")
-- 해시태그 3-4개만 (마지막에)
+- 해시태그 3-4개만 (마지막에, 매체 이름 포함)
 
-예시 톤: "ㄹㅇ 미쳤다... [이름]이 [이벤트]에서 보여준 이 모습 실화임? 🔥 팬들 다 기절각ㅋㅋㅋ #텐아시아 #[이름] #화제"
+예시 톤: "ㄹㅇ 미쳤다... [이름]이 [이벤트]에서 보여준 이 모습 실화임? 🔥 팬들 다 기절각ㅋㅋㅋ #{site_name} #[이름] #화제"
 
 게시물만 작성 (설명 없이):"""
 
@@ -128,6 +129,12 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
         # Instagram - Korean
         yield {"platform": "instagram", "language": "korean", "status": "generating", "content": None}
 
+        # 영문 사이트명 매핑
+        site_name_en = {
+            "텐아시아": "TenAsia",
+            "한국경제": "HankyungKorea"
+        }.get(site_name, site_name)
+
         instagram_korean_prompt = f"""{korean_instruction}
 
 {article_info}
@@ -138,7 +145,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 - **감성적인 문구**로 팬들의 공감 유도
 - 4-5문장으로 간결하지만 감동적으로
 - 이모지 5-6개 전략적으로 배치
-- 반드시 **#텐아시아 #TenAsia** 포함
+- 반드시 **#{site_name} #{site_name_en}** 포함
 - 마지막 줄에 해시태그 5-7개 (한국어/영어 혼용 가능)
 
 예시 구조:
@@ -146,7 +153,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 [본문 2-3문장 - 팬들이 공감할 수 있는 내용]
 [마무리 문장 + 이모지]
 
-[해시태그: #텐아시아 #TenAsia #[관련태그] #[관련태그] #[관련태그]]
+[해시태그: #{site_name} #{site_name_en} #[관련태그] #[관련태그] #[관련태그]]
 
 게시물만 작성:"""
 
@@ -193,10 +200,10 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 - **유저들과 소통할 수 있는 반말/존댓말 섞인 질문형 문구**
 - 3-4문장으로 짧고 친근하게
 - 마지막은 반드시 질문으로 끝내기 (댓글 유도)
-- 해시태그 2-3개만 (자연스럽게 중간에)
+- 해시태그 2-3개만 (자연스럽게 중간에, 매체 이름 포함)
 - 친구와 대화하듯 편안한 톤
 
-예시 톤: "와 근데 진짜 [주제] 이거 실화임?? 👀 [내용] 이 정도면 ㄹㅇ 레전드 아니냐ㅋㅋㅋ 너네 생각은 어때? #텐아시아 #[관련태그]"
+예시 톤: "와 근데 진짜 [주제] 이거 실화임?? 👀 [내용] 이 정도면 ㄹㅇ 레전드 아니냐ㅋㅋㅋ 너네 생각은 어때? #{site_name} #[관련태그]"
 
 게시물만 작성:"""
 
