@@ -6,8 +6,79 @@ from extractor import extract_article
 st.set_page_config(
     page_title="Tenasia Global Viralizer",
     page_icon="🌐",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
+
+# 모바일 최적화 CSS
+st.markdown("""
+<style>
+    /* 모바일 최적화 */
+    @media (max-width: 768px) {
+        .stApp {
+            padding: 1rem 0.5rem;
+        }
+
+        /* 입력 영역 풀 너비 */
+        .stTextInput, .stTextArea {
+            width: 100% !important;
+        }
+
+        /* 버튼 풀 너비 */
+        .stButton button {
+            width: 100% !important;
+            margin-bottom: 0.5rem;
+        }
+
+        /* 탭 텍스트 크기 조정 */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.5rem;
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            font-size: 0.9rem;
+            padding: 0.5rem 0.75rem;
+        }
+
+        /* 텍스트 영역 높이 조정 */
+        .stTextArea textarea {
+            min-height: 150px !important;
+        }
+
+        /* 컬럼 간격 줄이기 */
+        .row-widget.stHorizontal {
+            gap: 0.5rem;
+        }
+    }
+
+    /* 데스크톱 최적화 */
+    @media (min-width: 769px) {
+        .stTextArea textarea {
+            min-height: 300px !important;
+        }
+    }
+
+    /* 공통 스타일 */
+    .stCode {
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+    }
+
+    .element-container {
+        margin-bottom: 0.5rem;
+    }
+
+    /* 타이틀 반응형 */
+    h1 {
+        font-size: clamp(1.5rem, 5vw, 2.5rem);
+    }
+
+    h2, h3 {
+        font-size: clamp(1.2rem, 3vw, 1.8rem);
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # 세션 상태 초기화
 if 'article_title' not in st.session_state:
@@ -18,6 +89,8 @@ if 'auto_generate' not in st.session_state:
     st.session_state.auto_generate = False
 if 'generation_count' not in st.session_state:
     st.session_state.generation_count = 0
+if 'is_mobile' not in st.session_state:
+    st.session_state.is_mobile = False
 if 'generated_posts' not in st.session_state:
     st.session_state.generated_posts = None
 if 'generation_status' not in st.session_state:
@@ -34,25 +107,42 @@ st.markdown("K-엔터 기사를 글로벌 바이럴 SNS 콘텐츠로 변환하�
 # 사이드바에 정보 표시
 with st.sidebar:
     st.header("ℹ️ 사용 방법")
+
+    # 모바일/데스크톱 안내
+    st.info("📱 모바일에서도 완벽하게 작동합니다!")
+
     st.markdown("""
-    **방법 1: URL 입력**
-    1. 텐아시아 기사 URL을 입력하세요
-    2. 'Extract' 버튼을 클릭하세요
-    3. 자동으로 기사가 추출됩니다
+    **방법 1: URL 입력** ⚡
+    1. 텐아시아 기사 URL 입력
+    2. 'Extract' 버튼 클릭
+    3. 자동으로 기사 추출 및 생성
 
-    **방법 2: 직접 입력**
-    1. 기사 내용을 직접 붙여넣으세요
-    2. 'Generate' 버튼을 클릭하세요
+    **방법 2: 직접 입력** ✍️
+    1. 기사 내용 붙여넣기
+    2. 'Generate' 버튼 클릭
 
-    **결과:**
-    - X, Instagram, Threads 게시물 확인
-    - Copy 버튼으로 간편하게 복사
+    **결과 확인** 🎉
+    - 🌐 English / 🇰🇷 Korean 탭 전환
+    - 📋 코드 블록에서 복사
+    - X, Instagram, Threads 각 6개 생성
     """)
 
     st.divider()
-    st.caption("Powered by Google Gemini AI")
 
-# 메인 컨텐츠
+    # 버전 정보
+    st.caption("🤖 Powered by Google Gemini 2.5 Flash")
+    st.caption("📱 Responsive Design for All Devices")
+
+# 디바이스 감지 (JavaScript)
+st.markdown("""
+<script>
+    const isMobile = window.innerWidth <= 768;
+    window.parent.postMessage({type: 'streamlit:setComponentValue', value: isMobile}, '*');
+</script>
+""", unsafe_allow_html=True)
+
+# 메인 컨텐츠 - 반응형 레이아웃
+# 모바일: 세로 배치, 데스크톱: 가로 배치
 col1, col2 = st.columns([1, 1])
 
 with col1:
