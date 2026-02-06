@@ -23,8 +23,8 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = ""):
         {"platform": "x", "language": "english", "status": "completed", "content": "..."}
     """
     try:
-        # Gemini 클라이언트 초기화
-        client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+        # Gemini 모델 초기화
+        model = genai.GenerativeModel('gemini-2.5-flash')
 
         # English 페르소나
         english_instruction = """당신은 K-엔터 전문 글로벌 에디터입니다.
@@ -224,8 +224,8 @@ def generate_sns_posts(article_text: str, article_title: str = "") -> dict:
         각 플랫폼별 게시물을 담은 딕셔너리
     """
     try:
-        # Gemini 클라이언트 초기화
-        client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+        # Gemini 모델 초기화
+        model = genai.GenerativeModel('gemini-2.5-flash')
 
         # 기본 페르소나 및 가이드라인
         base_instruction = """당신은 K-엔터 전문 글로벌 에디터입니다.
