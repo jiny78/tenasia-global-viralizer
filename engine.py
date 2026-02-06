@@ -133,7 +133,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
         # 영문 사이트명 매핑
         site_name_en = {
             "텐아시아": "TenAsia",
-            "한국경제": "HankyungKorea"
+            "한국경제": "hankyung"
         }.get(site_name, site_name)
 
         instagram_korean_prompt = f"""{korean_instruction}
