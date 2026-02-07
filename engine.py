@@ -2,6 +2,7 @@ import os
 import json
 import time
 import google.generativeai as genai
+from google.api_core import exceptions as google_exceptions
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -10,14 +11,41 @@ load_dotenv()
 # Configure Gemini API
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
+# JSON 스키마 정의
+RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kr": {
+            "type": "object",
+            "properties": {
+                "x": {"type": "string", "description": "X(Twitter)용 한국어 게시물"},
+                "insta": {"type": "string", "description": "Instagram용 한국어 게시물"},
+                "threads": {"type": "string", "description": "Threads용 한국어 게시물"}
+            },
+            "required": ["x", "insta", "threads"]
+        },
+        "en": {
+            "type": "object",
+            "properties": {
+                "x": {"type": "string", "description": "X(Twitter)용 영문 게시물"},
+                "insta": {"type": "string", "description": "Instagram용 영문 게시물"},
+                "threads": {"type": "string", "description": "Threads용 영문 게시물"}
+            },
+            "required": ["x", "insta", "threads"]
+        }
+    },
+    "required": ["kr", "en"]
+}
 
-def retry_with_exponential_backoff(func, max_retries=3):
+
+def retry_with_exponential_backoff(func, max_retries=3, progress_callback=None):
     """
     지수 백오프(Exponential Backoff) 방식으로 함수 실행을 재시도합니다.
 
     Args:
         func: 실행할 함수
         max_retries: 최대 재시도 횟수 (기본값: 3)
+        progress_callback: 재시도 진행 상황을 알리는 콜백 함수 (선택)
 
     Returns:
         함수 실행 결과
@@ -25,29 +53,40 @@ def retry_with_exponential_backoff(func, max_retries=3):
     Raises:
         마지막 시도에서 발생한 예외
     """
+    last_exception = None
+
     for attempt in range(max_retries):
         try:
             return func()
-        except Exception as e:
-            error_message = str(e)
+        except (google_exceptions.InternalServerError,
+                google_exceptions.ResourceExhausted,
+                google_exceptions.ServiceUnavailable) as e:
+            last_exception = e
 
-            # 500 에러 또는 네트워크 관련 에러인 경우에만 재시도
-            is_retryable = (
-                "500" in error_message or
-                "503" in error_message or
-                "timeout" in error_message.lower() or
-                "network" in error_message.lower() or
-                "connection" in error_message.lower()
-            )
-
-            if not is_retryable or attempt == max_retries - 1:
-                # 재시도 불가능한 에러이거나 마지막 시도인 경우 예외 발생
+            # 마지막 시도인 경우 예외 발생
+            if attempt == max_retries - 1:
                 raise
 
             # 지수 백오프: 2^attempt 초 대기 (1차: 2초, 2차: 4초, 3차: 8초)
             wait_time = 2 ** (attempt + 1)
-            print(f"API 호출 실패 (시도 {attempt + 1}/{max_retries}). {wait_time}초 후 재시도...")
+
+            # 진행 상황 콜백 호출
+            if progress_callback:
+                progress_callback(
+                    attempt=attempt + 1,
+                    max_retries=max_retries,
+                    wait_time=wait_time,
+                    error=str(e)
+                )
+
             time.sleep(wait_time)
+        except Exception as e:
+            # 재시도 불가능한 에러는 즉시 발생
+            raise
+
+    # 여기 도달하면 안 되지만, 안전을 위해
+    if last_exception:
+        raise last_exception
 
 
 def generate_sns_posts_streaming(article_text: str, article_title: str = "", site_name: str = "해당 매체"):
@@ -79,6 +118,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
             "top_k": 40,
             "max_output_tokens": 4096,
             "response_mime_type": "application/json",  # JSON 응답 강제
+            "response_schema": RESPONSE_SCHEMA,  # JSON 스키마 정의
         }
 
         # Gemini 모델 초기화
@@ -159,23 +199,32 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 반드시 아래 JSON 구조로 응답하세요. 다른 설명 없이 순수 JSON만 반환하세요:
 
 {{
-  "x": {{
-    "english": "X용 영문 게시물 전체 텍스트",
-    "korean": "X용 한글 게시물 전체 텍스트"
+  "kr": {{
+    "x": "X용 한국어 게시물 전체 텍스트",
+    "insta": "Instagram용 한국어 게시물 전체 텍스트",
+    "threads": "Threads용 한국어 게시물 전체 텍스트"
   }},
-  "instagram": {{
-    "english": "Instagram용 영문 게시물 전체 텍스트",
-    "korean": "Instagram용 한글 게시물 전체 텍스트"
-  }},
-  "threads": {{
-    "english": "Threads용 영문 게시물 전체 텍스트",
-    "korean": "Threads용 한글 게시물 전체 텍스트"
+  "en": {{
+    "x": "X용 영문 게시물 전체 텍스트",
+    "insta": "Instagram용 영문 게시물 전체 텍스트",
+    "threads": "Threads용 영문 게시물 전체 텍스트"
   }}
 }}
 """
 
         # 진행 상황 표시
         yield {"platform": "all", "language": "all", "status": "generating", "content": None}
+
+        # 재시도 진행 상황을 알리는 콜백
+        def retry_progress_callback(attempt, max_retries, wait_time, error):
+            yield {
+                "platform": "retry",
+                "status": "retrying",
+                "attempt": attempt,
+                "max_retries": max_retries,
+                "wait_time": wait_time,
+                "error": error
+            }
 
         # 재시도 로직이 포함된 API 호출
         def api_call():
@@ -184,7 +233,33 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
                 raise Exception("Empty response from API")
             return response
 
-        response = retry_with_exponential_backoff(api_call, max_retries=3)
+        # 재시도 진행 상황을 yield하기 위한 wrapper
+        retry_attempts = []
+
+        def progress_callback(attempt, max_retries, wait_time, error):
+            retry_attempts.append({
+                "attempt": attempt,
+                "max_retries": max_retries,
+                "wait_time": wait_time,
+                "error": error
+            })
+
+        response = retry_with_exponential_backoff(
+            api_call,
+            max_retries=3,
+            progress_callback=progress_callback
+        )
+
+        # 재시도 발생 시 알림
+        for retry_info in retry_attempts:
+            yield {
+                "platform": "retry",
+                "status": "retrying",
+                "attempt": retry_info["attempt"],
+                "max_retries": retry_info["max_retries"],
+                "wait_time": retry_info["wait_time"],
+                "error": retry_info["error"]
+            }
 
         # JSON 파싱
         try:
@@ -195,27 +270,27 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         # 각 플랫폼/언어별로 순차적으로 yield
         # X (Twitter) - English
         yield {"platform": "x", "language": "english", "status": "generating", "content": None}
-        yield {"platform": "x", "language": "english", "status": "completed", "content": result["x"]["english"]}
+        yield {"platform": "x", "language": "english", "status": "completed", "content": result["en"]["x"]}
 
         # X (Twitter) - Korean
         yield {"platform": "x", "language": "korean", "status": "generating", "content": None}
-        yield {"platform": "x", "language": "korean", "status": "completed", "content": result["x"]["korean"]}
+        yield {"platform": "x", "language": "korean", "status": "completed", "content": result["kr"]["x"]}
 
         # Instagram - English
         yield {"platform": "instagram", "language": "english", "status": "generating", "content": None}
-        yield {"platform": "instagram", "language": "english", "status": "completed", "content": result["instagram"]["english"]}
+        yield {"platform": "instagram", "language": "english", "status": "completed", "content": result["en"]["insta"]}
 
         # Instagram - Korean
         yield {"platform": "instagram", "language": "korean", "status": "generating", "content": None}
-        yield {"platform": "instagram", "language": "korean", "status": "completed", "content": result["instagram"]["korean"]}
+        yield {"platform": "instagram", "language": "korean", "status": "completed", "content": result["kr"]["insta"]}
 
         # Threads - English
         yield {"platform": "threads", "language": "english", "status": "generating", "content": None}
-        yield {"platform": "threads", "language": "english", "status": "completed", "content": result["threads"]["english"]}
+        yield {"platform": "threads", "language": "english", "status": "completed", "content": result["en"]["threads"]}
 
         # Threads - Korean
         yield {"platform": "threads", "language": "korean", "status": "generating", "content": None}
-        yield {"platform": "threads", "language": "korean", "status": "completed", "content": result["threads"]["korean"]}
+        yield {"platform": "threads", "language": "korean", "status": "completed", "content": result["kr"]["threads"]}
 
         # 최종 완료 신호
         yield {"platform": "all", "status": "completed", "model": "gemini-2.5-flash"}
