@@ -26,19 +26,48 @@ def get_youtube_stream_url(youtube_url: str) -> Dict[str, any]:
         Exception: URL 추출 실패 시
     """
     ydl_opts = {
-        'format': 'best[ext=mp4]/best',  # mp4 우선, 없으면 최선의 포맷
+        # 포맷 선택: 낮은 해상도부터 시도 (더 안정적)
+        'format': 'worst[ext=mp4]/worst/best[ext=mp4]/best',
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
         'socket_timeout': 30,
+        # User-Agent 추가 (봇 감지 우회)
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        # 추가 옵션
+        'nocheckcertificate': True,
+        'prefer_insecure': False,
+        'geo_bypass': True,
+        'age_limit': None,
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=False)
 
+            # 여러 URL 형식 중 가장 적합한 것 선택
+            video_url = info.get('url')
+
+            # 대체 URL 확인
+            if not video_url and 'formats' in info:
+                # mp4 포맷 우선 선택
+                for fmt in info['formats']:
+                    if fmt.get('ext') == 'mp4' and fmt.get('url'):
+                        video_url = fmt['url']
+                        break
+
+                # mp4가 없으면 첫 번째 사용 가능한 포맷
+                if not video_url:
+                    for fmt in info['formats']:
+                        if fmt.get('url'):
+                            video_url = fmt['url']
+                            break
+
+            if not video_url:
+                raise Exception("사용 가능한 스트림 URL을 찾을 수 없습니다")
+
             return {
-                'url': info['url'],
+                'url': video_url,
                 'title': info.get('title', 'Unknown'),
                 'duration': info.get('duration', 0),
                 'width': info.get('width', 0),
@@ -106,6 +135,12 @@ def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> Lis
     if num_frames is None:
         num_frames = config.MAX_FRAMES
 
+    # YouTube Shorts URL을 일반 URL로 변환
+    if '/shorts/' in youtube_url:
+        video_id = youtube_url.split('/shorts/')[-1].split('?')[0]
+        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+        print(f"📱 Shorts URL을 일반 URL로 변환: {youtube_url}")
+
     # 1. 스트리밍 URL 및 메타데이터 추출
     print(f"🔍 YouTube URL 분석 중...")
     video_info = get_youtube_stream_url(youtube_url)
@@ -119,10 +154,41 @@ def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> Lis
 
     # 2. VideoCapture로 스트림 열기
     print(f"\n📹 비디오 스트림 열기 중...")
-    cap = cv2.VideoCapture(stream_url)
 
-    if not cap.isOpened():
-        raise Exception("비디오 스트림을 열 수 없습니다.")
+    # OpenCV 백엔드 옵션 시도
+    cap = None
+    backends = [
+        cv2.CAP_ANY,      # 자동 선택
+        cv2.CAP_FFMPEG,   # FFmpeg (가장 안정적)
+        cv2.CAP_GSTREAMER # GStreamer
+    ]
+
+    for backend in backends:
+        try:
+            cap = cv2.VideoCapture(stream_url, backend)
+            if cap.isOpened():
+                print(f"✅ 백엔드 사용: {backend}")
+                break
+            else:
+                cap.release()
+                cap = None
+        except Exception as e:
+            print(f"⚠️  백엔드 {backend} 실패: {str(e)}")
+            continue
+
+    if cap is None or not cap.isOpened():
+        raise Exception(
+            "비디오 스트림을 열 수 없습니다.\n"
+            "가능한 원인:\n"
+            "1. YouTube의 일시적인 제한\n"
+            "2. 영상이 비공개 또는 삭제됨\n"
+            "3. 짧은 영상(Shorts)은 지원되지 않을 수 있음\n"
+            "4. 네트워크 연결 문제\n\n"
+            "해결 방법:\n"
+            "- 일반 YouTube 영상 URL을 시도해보세요\n"
+            "- 잠시 후 다시 시도해보세요\n"
+            "- 다른 영상 URL을 시도해보세요"
+        )
 
     try:
         # 총 프레임 수와 FPS 가져오기
