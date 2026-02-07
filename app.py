@@ -237,9 +237,10 @@ with col1:
     st.markdown("##### 방법 2: 유튜브 쇼츠 프레임 분석")
     youtube_url = st.text_input(
         "유튜브 쇼츠 URL",
-        placeholder="https://www.youtube.com/shorts/... 또는 https://youtu.be/...",
-        help="유튜브 쇼츠 URL을 입력하면 영상 프레임을 분석하여 게시물을 생성합니다"
+        placeholder="https://www.youtube.com/watch?v=... (일반 영상 추천)",
+        help="유튜브 URL을 입력하면 영상 프레임을 분석하여 게시물을 생성합니다. 일반 영상이 더 안정적입니다."
     )
+    st.caption("💡 테스트용 샘플: `https://www.youtube.com/watch?v=dQw4w9WgXcQ`")
 
     extract_youtube_button = st.button("🎬 Extract Frames", type="secondary", use_container_width=True, key="extract_youtube_btn")
 
@@ -359,37 +360,74 @@ if extract_youtube_button:
             st.rerun()
 
         except Exception as e:
+            import traceback
             error_msg = str(e)
+            error_trace = traceback.format_exc()
+
             with col1:
                 st.error(f"❌ 유튜브 처리 실패")
 
-                # 상세 에러 메시지
+                # 에러 메시지 표시
+                st.warning("**에러 상세:**")
+                st.code(error_msg)
+
+                # 구체적인 해결 방법
                 if "비디오 스트림을 열 수 없습니다" in error_msg:
-                    st.warning("**해결 방법:**")
                     st.info("""
-                    1. **일반 YouTube 영상을 시도해보세요** (Shorts 대신)
-                    2. **영상이 공개 상태인지 확인**해주세요
-                    3. **잠시 후 다시 시도**해보세요 (YouTube 제한 가능성)
-                    4. **방법 3: 직접 입력**을 사용하여 영상 내용을 직접 입력해보세요
+                    **해결 방법:**
+                    1. 일반 YouTube 영상 URL 사용 (Shorts 대신)
+                    2. 영상이 공개 상태인지 확인
+                    3. 짧은 영상 시도 (30초~2분)
+                    4. 잠시 후 다시 시도
+                    """)
+                elif "영상을 사용할 수 없습니다" in error_msg or "Video unavailable" in error_msg:
+                    st.info("""
+                    **이 영상은 사용할 수 없습니다:**
+                    - 영상이 삭제되었거나 비공개일 수 있습니다
+                    - 다른 공개 영상을 시도해주세요
+                    """)
+                elif "연령 제한" in error_msg:
+                    st.info("""
+                    **연령 제한 영상:**
+                    - 연령 제한이 없는 영상을 사용해주세요
+                    """)
+                elif "지역 제한" in error_msg or "not available" in error_msg:
+                    st.info("""
+                    **지역 제한 또는 저작권 문제:**
+                    - 다른 영상을 시도해주세요
                     """)
                 else:
-                    st.code(error_msg)
+                    st.info("""
+                    **일반적인 해결 방법:**
+                    1. 테스트용 샘플 URL 시도
+                    2. 방법 3: 직접 입력 사용
+                    3. yt-dlp 업데이트
+                    """)
 
-                # yt-dlp 업데이트 안내
-                with st.expander("💡 문제가 계속되면?"):
+                # 디버그 정보
+                with st.expander("🔍 디버그 정보 (개발자용)"):
+                    st.code(error_trace)
+
+                # 추가 도움말
+                with st.expander("💡 추가 도움말"):
                     st.markdown("""
-                    **yt-dlp 업데이트가 필요할 수 있습니다:**
+                    **yt-dlp 업데이트:**
                     ```bash
                     pip install --upgrade yt-dlp
                     ```
 
+                    **OpenCV 재설치:**
+                    ```bash
+                    pip install --upgrade opencv-python-headless
+                    ```
+
                     **또는 방법 3 사용:**
-                    - 유튜브 영상 내용을 직접 입력하여 SNS 게시물 생성
+                    영상 내용을 직접 입력하여 SNS 게시물 생성
                     """)
 
             with col2:
                 st.error(f"❌ 유튜브 처리 실패")
-                st.info("왼쪽 패널에서 해결 방법을 확인하세요")
+                st.info("왼쪽 패널에서 에러 상세와 해결 방법을 확인하세요")
 
 # Generate 버튼 클릭 시 또는 자동 생성 플래그가 설정된 경우
 should_generate = generate_button or st.session_state.auto_generate

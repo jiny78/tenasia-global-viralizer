@@ -12,12 +12,13 @@ from typing import List, Optional, Dict
 import config
 
 
-def get_youtube_stream_url(youtube_url: str) -> Dict[str, any]:
+def get_youtube_stream_url(youtube_url: str, debug: bool = True) -> Dict[str, any]:
     """
     YouTube URL에서 가장 안정적인 mp4 스트리밍 URL을 추출합니다.
 
     Args:
         youtube_url: YouTube 비디오 URL
+        debug: 디버그 정보 출력 여부
 
     Returns:
         비디오 정보 딕셔너리 (url, title, duration 등)
@@ -28,8 +29,8 @@ def get_youtube_stream_url(youtube_url: str) -> Dict[str, any]:
     ydl_opts = {
         # 포맷 선택: 낮은 해상도부터 시도 (더 안정적)
         'format': 'worst[ext=mp4]/worst/best[ext=mp4]/best',
-        'quiet': True,
-        'no_warnings': True,
+        'quiet': not debug,
+        'no_warnings': not debug,
         'extract_flat': False,
         'socket_timeout': 30,
         # User-Agent 추가 (봇 감지 우회)
@@ -42,18 +43,35 @@ def get_youtube_stream_url(youtube_url: str) -> Dict[str, any]:
     }
 
     try:
+        if debug:
+            print(f"📋 yt-dlp 옵션: {ydl_opts}")
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            if debug:
+                print(f"🔄 yt-dlp로 정보 추출 중...")
+
             info = ydl.extract_info(youtube_url, download=False)
+
+            if debug:
+                print(f"✅ 정보 추출 완료")
+                print(f"   - 제목: {info.get('title', 'Unknown')}")
+                print(f"   - 길이: {info.get('duration', 0)}초")
+                print(f"   - 사용 가능한 포맷 수: {len(info.get('formats', []))}")
 
             # 여러 URL 형식 중 가장 적합한 것 선택
             video_url = info.get('url')
 
             # 대체 URL 확인
             if not video_url and 'formats' in info:
+                if debug:
+                    print(f"🔍 대체 포맷 검색 중...")
+
                 # mp4 포맷 우선 선택
                 for fmt in info['formats']:
                     if fmt.get('ext') == 'mp4' and fmt.get('url'):
                         video_url = fmt['url']
+                        if debug:
+                            print(f"✅ mp4 포맷 선택: {fmt.get('format_id')}")
                         break
 
                 # mp4가 없으면 첫 번째 사용 가능한 포맷
@@ -61,6 +79,8 @@ def get_youtube_stream_url(youtube_url: str) -> Dict[str, any]:
                     for fmt in info['formats']:
                         if fmt.get('url'):
                             video_url = fmt['url']
+                            if debug:
+                                print(f"✅ 대체 포맷 선택: {fmt.get('ext')} ({fmt.get('format_id')})")
                             break
 
             if not video_url:
@@ -75,7 +95,19 @@ def get_youtube_stream_url(youtube_url: str) -> Dict[str, any]:
             }
 
     except Exception as e:
-        raise Exception(f"YouTube URL 추출 실패: {str(e)}")
+        error_msg = str(e)
+        if debug:
+            print(f"❌ 에러 발생: {error_msg}")
+
+        # 더 자세한 에러 메시지
+        if "Video unavailable" in error_msg:
+            raise Exception("영상을 사용할 수 없습니다. 영상이 삭제되었거나 비공개일 수 있습니다.")
+        elif "Sign in to confirm your age" in error_msg:
+            raise Exception("연령 제한이 있는 영상입니다. 다른 영상을 시도해주세요.")
+        elif "This video is not available" in error_msg:
+            raise Exception("이 영상은 사용할 수 없습니다. 지역 제한이나 저작권 문제일 수 있습니다.")
+        else:
+            raise Exception(f"YouTube URL 추출 실패: {error_msg}")
 
 
 def extract_frame_with_retry(cap: cv2.VideoCapture, target_frame: int, total_frames: int, max_retry: int = 5) -> Optional[np.ndarray]:
