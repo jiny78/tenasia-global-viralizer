@@ -418,7 +418,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
             "temperature": 0.9,
             "top_p": 0.95,
             "top_k": 40,
-            "max_output_tokens": 4096,
+            "max_output_tokens": 8192,  # Instagram 긴 게시물 대응 (4096 → 8192)
             "response_mime_type": "application/json",  # JSON 응답 강제
             "response_schema": RESPONSE_SCHEMA,  # JSON 스키마 정의
         }
@@ -755,7 +755,12 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         try:
             result = json.loads(response.text)
         except json.JSONDecodeError as e:
-            raise Exception(f"Failed to parse JSON response: {str(e)}\n\nResponse text: {response.text[:500]}")
+            # 더 자세한 에러 정보 출력
+            error_msg = f"Failed to parse JSON response: {str(e)}\n\n"
+            error_msg += f"Response length: {len(response.text)} characters\n"
+            error_msg += f"Error position: line {e.lineno}, column {e.colno}\n\n"
+            error_msg += f"Full response text:\n{response.text}\n"
+            raise Exception(error_msg)
 
         # 각 플랫폼/언어별로 순차적으로 yield
         # X (Twitter) - English
