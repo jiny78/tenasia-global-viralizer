@@ -59,6 +59,73 @@ RESPONSE_SCHEMA = {
             },
             "required": ["kr", "en"]
         },
+        "viral_analysis": {
+            "type": "object",
+            "description": "각 플랫폼별 바이럴 가능성 분석 (1-100점)",
+            "properties": {
+                "kr": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "object",
+                            "properties": {
+                                "score": {"type": "integer", "description": "바이럴 점수 (1-100)"},
+                                "reason": {"type": "string", "description": "점수 근거 한 문장"}
+                            },
+                            "required": ["score", "reason"]
+                        },
+                        "insta": {
+                            "type": "object",
+                            "properties": {
+                                "score": {"type": "integer", "description": "바이럴 점수 (1-100)"},
+                                "reason": {"type": "string", "description": "점수 근거 한 문장"}
+                            },
+                            "required": ["score", "reason"]
+                        },
+                        "threads": {
+                            "type": "object",
+                            "properties": {
+                                "score": {"type": "integer", "description": "바이럴 점수 (1-100)"},
+                                "reason": {"type": "string", "description": "점수 근거 한 문장"}
+                            },
+                            "required": ["score", "reason"]
+                        }
+                    },
+                    "required": ["x", "insta", "threads"]
+                },
+                "en": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "object",
+                            "properties": {
+                                "score": {"type": "integer", "description": "Viral score (1-100)"},
+                                "reason": {"type": "string", "description": "Score reasoning in one sentence"}
+                            },
+                            "required": ["score", "reason"]
+                        },
+                        "insta": {
+                            "type": "object",
+                            "properties": {
+                                "score": {"type": "integer", "description": "Viral score (1-100)"},
+                                "reason": {"type": "string", "description": "Score reasoning in one sentence"}
+                            },
+                            "required": ["score", "reason"]
+                        },
+                        "threads": {
+                            "type": "object",
+                            "properties": {
+                                "score": {"type": "integer", "description": "Viral score (1-100)"},
+                                "reason": {"type": "string", "description": "Score reasoning in one sentence"}
+                            },
+                            "required": ["score", "reason"]
+                        }
+                    },
+                    "required": ["x", "insta", "threads"]
+                }
+            },
+            "required": ["kr", "en"]
+        },
         "key_takeaway": {
             "type": "object",
             "description": "기사의 핵심 요약 1줄",
@@ -69,7 +136,7 @@ RESPONSE_SCHEMA = {
             "required": ["kr", "en"]
         }
     },
-    "required": ["kr", "en", "review_score", "key_takeaway"]
+    "required": ["kr", "en", "review_score", "viral_analysis", "key_takeaway"]
 }
 
 
@@ -270,6 +337,20 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 
 각 게시물마다 위 3가지 기준으로 1-10점의 review_score를 매기세요.
 
+## 🔥 Viral Analysis (바이럴 가능성 평가)
+
+각 플랫폼별 게시물이 글로벌 팬덤 사이에서 얼마나 바이럴될지 **1점부터 100점 사이의 점수(viral_score)**를 매기고, 구체적인 이유(viral_reason)를 **한 문장**으로 작성하세요.
+
+**평가 기준:**
+- **X (Twitter)**: 현재 트렌딩 해시태그와의 일치도, 리트윗 유도력, 훅의 강도, Gen Z 슬랭 활용도
+- **Instagram**: 감성적 서사의 완성도, 이모지 배치의 시각적 효과, 해시태그 전략, 팬들의 공감 포인트
+- **Threads**: 질문의 참여 유도력, 댓글 유발 가능성, 대화체의 자연스러움
+
+**예시:**
+- X (85점): "현재 X에서 유행하는 'main character energy' 슬랭을 활용하여 높은 리트윗 가능성"
+- Instagram (92점): "3문단 완전 서사 구조와 감성적 질문이 팬들의 공감과 저장을 유도함"
+- Threads (78점): "열린 질문 형식이 댓글 참여를 유도하지만 훅의 강도가 다소 약함"
+
 ## 📱 플랫폼별 상세 가이드라인
 
 ### 🐦 X (Twitter) - Punchy & Viral
@@ -395,13 +476,45 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
       "threads": 9
     }}
   }},
+  "viral_analysis": {{
+    "kr": {{
+      "x": {{
+        "score": 85,  // 1-100 바이럴 점수
+        "reason": "현재 국내 트위터에서 유행하는 리액션 표현('ㄹㅇ', '미쳤다')을 활용하여 높은 RT 가능성"
+      }},
+      "insta": {{
+        "score": 92,
+        "reason": "3문단 완전 서사 구조와 구체적 수치가 팬들의 공감과 저장을 유도함"
+      }},
+      "threads": {{
+        "score": 78,
+        "reason": "열린 질문 형식이 댓글 참여를 유도하지만 훅의 강도가 다소 약함"
+      }}
+    }},
+    "en": {{
+      "x": {{
+        "score": 88,
+        "reason": "Uses trending Gen Z slang ('main character energy', 'no cap') for high RT potential"
+      }},
+      "insta": {{
+        "score": 90,
+        "reason": "Full 3-paragraph narrative with emotional hooks drives saves and shares"
+      }},
+      "threads": {{
+        "score": 82,
+        "reason": "Conversational question format encourages replies but could use stronger hook"
+      }}
+    }}
+  }},
   "key_takeaway": {{
     "kr": "이 기사의 핵심 요약을 한 줄로 (예: '[아티스트]가 [성과]를 달성하며 새로운 역사를 썼다')",
     "en": "One-line key takeaway (e.g., '[Artist] makes history with [achievement]')"
   }}
 }}
 
-**중요**: 각 게시물을 작성한 후, 완성도 체크포인트 3가지(팩트 정확성, 품격, 자연스러움)를 기준으로 1-10점의 review_score를 정직하게 매기세요.
+**중요**:
+1. 각 게시물을 작성한 후, 완성도 체크포인트 3가지(팩트 정확성, 품격, 자연스러움)를 기준으로 1-10점의 review_score를 정직하게 매기세요.
+2. 각 게시물의 바이럴 가능성을 1-100점으로 평가하고, 구체적인 이유를 한 문장으로 작성하세요.
 """
 
         # 진행 상황 표시
