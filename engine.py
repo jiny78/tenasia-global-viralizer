@@ -207,6 +207,21 @@ def safe_generate_content(model, prompt, max_retries=None, progress_callback=Non
             # 대기
             time.sleep(wait_time)
 
+        except google_exceptions.NotFound as e:
+            # 404 NotFound 에러 (모델을 찾을 수 없음)
+            error_msg = str(e)
+            if "models/" in error_msg:
+                model_name = error_msg.split("models/")[1].split(" ")[0]
+                raise Exception(
+                    f"모델을 찾을 수 없습니다: {model_name}\n\n"
+                    f"💡 해결 방법:\n"
+                    f"1. config.py의 모델 이름을 확인하세요\n"
+                    f"2. Fallback 모델({config.FALLBACK_MODEL})이 자동으로 적용되어야 합니다\n"
+                    f"3. API 키 권한을 확인하세요"
+                )
+            else:
+                raise Exception(f"모델 NotFound 에러: {str(e)}")
+
         except Exception as e:
             # 재시도 불가능한 에러는 즉시 발생
             raise Exception(f"재시도 불가능한 에러: {type(e).__name__} - {str(e)}")
@@ -303,12 +318,24 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         # 비디오 프레임이 있으면 VIDEO_MODEL 사용, 없으면 ARTICLE_MODEL 사용
         model_name = config.VIDEO_MODEL if video_frames else config.ARTICLE_MODEL
 
-        # Gemini 모델 초기화
-        model = genai.GenerativeModel(
-            model_name,
-            safety_settings=safety_settings,
-            generation_config=generation_config
-        )
+        # Gemini 모델 초기화 (Fallback 로직 포함)
+        try:
+            model = genai.GenerativeModel(
+                model_name,
+                safety_settings=safety_settings,
+                generation_config=generation_config
+            )
+            print(f"✅ 모델 로드 성공: {model_name}")
+        except Exception as e:
+            # 모델을 찾을 수 없으면 fallback 모델 사용
+            print(f"⚠️  {model_name} 모델 로드 실패: {str(e)}")
+            print(f"🔄 Fallback 모델로 전환: {config.FALLBACK_MODEL}")
+            model_name = config.FALLBACK_MODEL
+            model = genai.GenerativeModel(
+                model_name,
+                safety_settings=safety_settings,
+                generation_config=generation_config
+            )
 
         # 영문 사이트명 매핑
         site_name_en = {

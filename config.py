@@ -14,6 +14,10 @@ ARTICLE_MODEL = "gemini-2.0-flash"
 # 멀티모달 프레임 분석용 모델 (비디오 콘텐츠 분석)
 VIDEO_MODEL = "gemini-1.5-flash"
 
+# Fallback 모델 (모델을 찾을 수 없을 때 사용)
+# gemini-1.5-flash는 가장 범용적이고 안정적인 모델
+FALLBACK_MODEL = "gemini-1.5-flash"
+
 
 # ========================================
 # API 설정
