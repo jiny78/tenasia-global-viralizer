@@ -430,8 +430,11 @@ if should_generate and content_to_use.strip():
             completed_steps = 0
             platform_status = {"x": 0, "instagram": 0, "threads": 0}  # 0: pending, 1: generating, 2: completed
 
+            # 유튜브 프레임이 있으면 함께 전달
+            video_frames = st.session_state.get('youtube_frames', None)
+
             # 스트리밍 방식으로 생성
-            for update in generate_sns_posts_streaming(content_to_use, title_to_use, site_name_to_use):
+            for update in generate_sns_posts_streaming(content_to_use, title_to_use, site_name_to_use, video_frames):
                 platform = update.get("platform")
                 status = update.get("status")
                 language = update.get("language")

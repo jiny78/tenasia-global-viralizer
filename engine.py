@@ -267,15 +267,16 @@ def retry_with_exponential_backoff(func, max_retries=None, progress_callback=Non
         raise last_exception
 
 
-def generate_sns_posts_streaming(article_text: str, article_title: str = "", site_name: str = "해당 매체"):
+def generate_sns_posts_streaming(article_text: str, article_title: str = "", site_name: str = "해당 매체", video_frames=None):
     """
-    한국어 기사를 받아 English와 Korean 버전의 SNS 게시물을 스트리밍 방식으로 생성합니다.
+    한국어 기사 또는 비디오 프레임을 받아 English와 Korean 버전의 SNS 게시물을 스트리밍 방식으로 생성합니다.
     단 한 번의 API 호출로 모든 플랫폼/언어 조합의 게시물을 JSON 형식으로 받아옵니다.
 
     Args:
         article_text: 한국어 기사 내용
         article_title: 한국어 기사 제목 (선택)
         site_name: 출처 사이트 이름 (선택, 기본값: "해당 매체")
+        video_frames: 비디오 프레임 리스트 (PIL.Image 객체, 선택)
 
     Yields:
         각 플랫폼/언어별 결과를 담은 딕셔너리
@@ -299,9 +300,12 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
             "response_schema": RESPONSE_SCHEMA,  # JSON 스키마 정의
         }
 
+        # 비디오 프레임이 있으면 VIDEO_MODEL 사용, 없으면 ARTICLE_MODEL 사용
+        model_name = config.VIDEO_MODEL if video_frames else config.ARTICLE_MODEL
+
         # Gemini 모델 초기화
         model = genai.GenerativeModel(
-            config.ARTICLE_MODEL,
+            model_name,
             safety_settings=safety_settings,
             generation_config=generation_config
         )
@@ -312,7 +316,19 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
             "한국경제": "hankyung"
         }.get(site_name, site_name)
 
-        article_info = f"""
+        # 비디오 프레임이 있을 경우 멀티모달 프롬프트
+        if video_frames:
+            article_info = f"""
+영상 제목: {article_title}
+
+영상 정보:
+{article_text}
+
+📹 제공된 프레임: {len(video_frames)}개의 영상 프레임이 아래에 포함되어 있습니다.
+이 프레임들을 분석하여 영상의 핵심 내용, 분위기, 비주얼 요소를 파악하고 SNS 게시물에 반영하세요.
+"""
+        else:
+            article_info = f"""
 기사 제목: {article_title}
 
 기사 내용:
@@ -320,8 +336,9 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 """
 
         # 통합 프롬프트: 한 번의 API 호출로 모든 플랫폼/언어 조합 생성
+        content_type = "영상" if video_frames else "기사"
         unified_prompt = f"""당신은 {site_name}의 수석 글로벌 SNS 에디터입니다.
-아래 기사를 바탕으로 3개 플랫폼(X, Instagram, Threads) x 2개 언어(English, Korean) = 총 6개의 SNS 게시물을 생성하세요.
+아래 {content_type}를 바탕으로 3개 플랫폼(X, Instagram, Threads) x 2개 언어(English, Korean) = 총 6개의 SNS 게시물을 생성하세요.
 
 {article_info}
 
@@ -331,11 +348,13 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 
 게시물 작성 전, 반드시 다음 3가지를 스스로 검토하세요:
 
-✓ **팩트 체크**: 기사 본문의 정보와 100% 일치하는가? 숫자, 날짜, 인용문 등을 정확히 사용했는가?
+✓ **팩트 체크**: {content_type} 내용의 정보와 100% 일치하는가? 숫자, 날짜, 인용문 등을 정확히 사용했는가?
 ✓ **품격 유지**: {site_name}의 브랜드 이미지에 맞는 고급스럽고 전문적인 어휘를 사용했는가?
 ✓ **자연스러운 현지화**: 번역투가 아닌, 해당 언어권의 인플루언서가 작성한 것 같은 자연스러운 표현인가?
 
-각 게시물마다 위 3가지 기준으로 1-10점의 review_score를 매기세요.
+{"✓ **비주얼 반영**: 제공된 프레임의 비주얼 요소(색감, 분위기, 액션)를 게시물에 반영했는가?" if video_frames else ""}
+
+각 게시물마다 위 기준으로 1-10점의 review_score를 매기세요.
 
 ## 🔥 Viral Analysis (바이럴 가능성 평가)
 
@@ -352,6 +371,8 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 - Threads (78점): "열린 질문 형식이 댓글 참여를 유도하지만 훅의 강도가 다소 약함"
 
 ## 📱 플랫폼별 상세 가이드라인
+
+{"### 🎬 비디오 프레임 분석 가이드 (Video Analysis Guide)\n\n제공된 프레임들을 분석하여 다음 요소들을 파악하고 게시물에 반영하세요:\n\n1. **핵심 비주얼 요소**:\n   - 주요 인물의 표정, 동작, 포즈\n   - 색감과 분위기 (밝고 경쾌한지, 어둡고 감성적인지)\n   - 배경과 세트 (무대, 스튜디오, 야외 등)\n   - 특별한 의상이나 소품\n\n2. **영상의 흐름과 하이라이트**:\n   - 프레임들의 순서를 보고 영상의 전체적인 흐름 파악\n   - 가장 임팩트 있는 장면 (클라이맥스) 식별\n   - 반복되는 동작이나 패턴\n\n3. **감정과 에너지**:\n   - 영상에서 느껴지는 전반적인 감정 (즐거움, 슬픔, 흥분, 차분함)\n   - 에너지 레벨 (고에너지 댄스, 차분한 발라드 등)\n\n4. **게시물 반영**:\n   - 비주얼 요소를 구체적으로 언급 (예: '그 빨간 드레스', 'iconic stage presence')\n   - 감정과 에너지를 텍스트로 전달 (예: 'serving high energy', '감성 폭발')\n   - 특별한 순간을 강조 (예: 'that moment when...', '그 장면에서...')\n\n" if video_frames else ""}
 
 ### 🐦 X (Twitter) - Punchy & Viral
 
@@ -531,13 +552,30 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
                 "error": error
             })
 
-        # 안전한 API 호출 (Exponential Backoff 포함)
-        response = safe_generate_content(
-            model,
-            unified_prompt,
-            max_retries=config.MAX_RETRIES,
-            progress_callback=progress_callback
-        )
+        # 비디오 프레임이 있을 경우 멀티모달 콘텐츠 구성
+        if video_frames:
+            # 프롬프트와 프레임 이미지를 함께 전달
+            content_parts = [unified_prompt]
+
+            # 프레임 이미지 추가 (최대 10개)
+            for i, frame in enumerate(video_frames[:10]):
+                content_parts.append(frame)
+
+            # 안전한 API 호출 (Exponential Backoff 포함)
+            response = safe_generate_content(
+                model,
+                content_parts,
+                max_retries=config.MAX_RETRIES,
+                progress_callback=progress_callback
+            )
+        else:
+            # 텍스트만 있을 경우 기존 방식
+            response = safe_generate_content(
+                model,
+                unified_prompt,
+                max_retries=config.MAX_RETRIES,
+                progress_callback=progress_callback
+            )
 
         # 재시도 발생 시 알림
         for retry_info in retry_attempts:
@@ -624,7 +662,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         }
 
         # 최종 완료 신호
-        yield {"platform": "all", "status": "completed", "model": config.ARTICLE_MODEL}
+        yield {"platform": "all", "status": "completed", "model": model_name}
 
     except Exception as e:
         import traceback
