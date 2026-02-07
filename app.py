@@ -321,17 +321,25 @@ if should_generate and content_to_use.strip():
 
                     with status_container:
                         retry_info.warning(
-                            f"⚠️ **현재 구글 서버 응답 지연으로 재시도 중입니다... ({attempt}/{max_retries})**\n\n"
+                            f"⚠️ **구글 서버 응답 대기 중 ({attempt}/{max_retries})...**\n\n"
                             f"💡 {wait_time}초 후 자동으로 다시 시도합니다."
                         )
-                        progress_text.text(f"⏳ 재시도 대기 중... ({attempt}/{max_retries})")
+                        progress_text.text(f"⏳ 구글 서버 응답 대기 중 ({attempt}/{max_retries})...")
 
                 # API 호출 시작
                 elif platform == "all" and status == "generating":
                     with status_container:
                         retry_info.empty()
                         progress_bar.progress(10)
-                        progress_text.text("🔄 기사를 분석 중...")
+                        # 동적 넛지 메시지
+                        nudge_messages = [
+                            "🔄 기사를 분석 중...",
+                            "✨ 텐아시아만의 감각적인 카피를 연마 중입니다...",
+                            "🎨 바이럴 콘텐츠를 디자인 중...",
+                            "💫 글로벌 팬들의 마음을 사로잡을 문구를 작성 중..."
+                        ]
+                        import random
+                        progress_text.text(random.choice(nudge_messages))
 
                 # 전체 완료
                 elif platform == "all" and status == "completed":
@@ -353,11 +361,21 @@ if should_generate and content_to_use.strip():
                         lang_emoji = "🇺🇸" if language == "english" else "🇰🇷"
                         lang_text = "영문" if language == "english" else "한국어"
 
+                        # 플랫폼별 동적 메시지
+                        platform_messages = {
+                            "x": ["클릭 유도 훅 작성 중", "바이럴 포인트 추출 중", "리트윗 유도 문구 작성 중"],
+                            "instagram": ["감성적인 서사 구축 중", "스토리텔링 문단 작성 중", "공감 포인트 발굴 중"],
+                            "threads": ["팬 참여 질문 고민 중", "대화형 문구 작성 중", "댓글 유도 전략 수립 중"]
+                        }
+
+                        import random
+                        action = random.choice(platform_messages.get(platform, ["생성 중"]))
+
                         with status_container:
                             # 진행률 업데이트
                             progress = 10 + int((completed_steps / total_steps) * 90)
                             progress_bar.progress(progress)
-                            progress_text.text(f"✍️ {platform.upper()} {lang_text} 게시물 생성 중... ({completed_steps + 1}/{total_steps})")
+                            progress_text.text(f"✍️ {platform.upper()} {lang_text} - {action}... ({completed_steps + 1}/{total_steps})")
 
                             # 플랫폼별 상태 업데이트
                             if platform == "x":
@@ -410,13 +428,17 @@ if should_generate and content_to_use.strip():
                                 "Korean Version",
                                 value=st.session_state.generated_posts["x"]["korean"],
                                 height=150,
-                                key=f"x_kr_{gen_id}",
+                                key=f"x_korean_textarea_{gen_id}",
                                 label_visibility="collapsed",
                                 disabled=True
                             )
                             st.code(st.session_state.generated_posts["x"]["korean"], language=None)
-                            if st.button("📋 Copy", key=f"x_kr_copy_{gen_id}", use_container_width=True):
-                                copy_to_clipboard(st.session_state.generated_posts["x"]["korean"], f"x_kr_copy_{gen_id}")
+
+                            # 추천 배지
+                            st.markdown("**🔥 이 카피 추천!** - 국내 커뮤니티 화제성 최적화")
+
+                            if st.button("📋 Copy", key=f"x_korean_copy_{gen_id}", use_container_width=True):
+                                copy_to_clipboard(st.session_state.generated_posts["x"]["korean"], f"x_korean_copy_{gen_id}")
                                 st.success("✅ 복사 완료!")
 
                     with tab_x_en:
@@ -425,13 +447,17 @@ if should_generate and content_to_use.strip():
                                 "English Version",
                                 value=st.session_state.generated_posts["x"]["english"],
                                 height=150,
-                                key=f"x_en_{gen_id}",
+                                key=f"x_english_textarea_{gen_id}",
                                 label_visibility="collapsed",
                                 disabled=True
                             )
                             st.code(st.session_state.generated_posts["x"]["english"], language=None)
-                            if st.button("📋 Copy", key=f"x_en_copy_{gen_id}", use_container_width=True):
-                                copy_to_clipboard(st.session_state.generated_posts["x"]["english"], f"x_en_copy_{gen_id}")
+
+                            # 추천 배지
+                            st.markdown("**💫 글로벌 팬 추천!** - Gen Z Slang & 바이럴 최적화")
+
+                            if st.button("📋 Copy", key=f"x_english_copy_{gen_id}", use_container_width=True):
+                                copy_to_clipboard(st.session_state.generated_posts["x"]["english"], f"x_english_copy_{gen_id}")
                                 st.success("✅ 복사 완료!")
 
                     st.divider()
@@ -449,13 +475,17 @@ if should_generate and content_to_use.strip():
                                 "Korean Version",
                                 value=st.session_state.generated_posts["instagram"]["korean"],
                                 height=300,
-                                key=f"ig_kr_{gen_id}",
+                                key=f"instagram_korean_textarea_{gen_id}",
                                 label_visibility="collapsed",
                                 disabled=True
                             )
                             st.code(st.session_state.generated_posts["instagram"]["korean"], language=None)
-                            if st.button("📋 Copy", key=f"ig_kr_copy_{gen_id}", use_container_width=True):
-                                copy_to_clipboard(st.session_state.generated_posts["instagram"]["korean"], f"ig_kr_copy_{gen_id}")
+
+                            # 추천 배지
+                            st.markdown("**✨ 감성 스토리 추천!** - 3문단 완전 서사 & 공감 포인트")
+
+                            if st.button("📋 Copy", key=f"instagram_korean_copy_{gen_id}", use_container_width=True):
+                                copy_to_clipboard(st.session_state.generated_posts["instagram"]["korean"], f"instagram_korean_copy_{gen_id}")
                                 st.success("✅ 복사 완료!")
 
                     with tab_ig_en:
@@ -464,13 +494,17 @@ if should_generate and content_to_use.strip():
                                 "English Version",
                                 value=st.session_state.generated_posts["instagram"]["english"],
                                 height=300,
-                                key=f"ig_en_{gen_id}",
+                                key=f"instagram_english_textarea_{gen_id}",
                                 label_visibility="collapsed",
                                 disabled=True
                             )
                             st.code(st.session_state.generated_posts["instagram"]["english"], language=None)
-                            if st.button("📋 Copy", key=f"ig_en_copy_{gen_id}", use_container_width=True):
-                                copy_to_clipboard(st.session_state.generated_posts["instagram"]["english"], f"ig_en_copy_{gen_id}")
+
+                            # 추천 배지
+                            st.markdown("**🌟 Global Story Pick!** - Full 3-para narrative & relatability")
+
+                            if st.button("📋 Copy", key=f"instagram_english_copy_{gen_id}", use_container_width=True):
+                                copy_to_clipboard(st.session_state.generated_posts["instagram"]["english"], f"instagram_english_copy_{gen_id}")
                                 st.success("✅ 복사 완료!")
 
                     st.divider()
@@ -488,13 +522,17 @@ if should_generate and content_to_use.strip():
                                 "Korean Version",
                                 value=st.session_state.generated_posts["threads"]["korean"],
                                 height=300,
-                                key=f"th_kr_{gen_id}",
+                                key=f"threads_korean_textarea_{gen_id}",
                                 label_visibility="collapsed",
                                 disabled=True
                             )
                             st.code(st.session_state.generated_posts["threads"]["korean"], language=None)
-                            if st.button("📋 Copy", key=f"th_kr_copy_{gen_id}", use_container_width=True):
-                                copy_to_clipboard(st.session_state.generated_posts["threads"]["korean"], f"th_kr_copy_{gen_id}")
+
+                            # 추천 배지
+                            st.markdown("**💬 팬 참여 추천!** - 질문형 구조로 댓글 폭발 유도")
+
+                            if st.button("📋 Copy", key=f"threads_korean_copy_{gen_id}", use_container_width=True):
+                                copy_to_clipboard(st.session_state.generated_posts["threads"]["korean"], f"threads_korean_copy_{gen_id}")
                                 st.success("✅ 복사 완료!")
 
                     with tab_th_en:
@@ -503,13 +541,17 @@ if should_generate and content_to_use.strip():
                                 "English Version",
                                 value=st.session_state.generated_posts["threads"]["english"],
                                 height=300,
-                                key=f"th_en_{gen_id}",
+                                key=f"threads_english_textarea_{gen_id}",
                                 label_visibility="collapsed",
                                 disabled=True
                             )
                             st.code(st.session_state.generated_posts["threads"]["english"], language=None)
-                            if st.button("📋 Copy", key=f"th_en_copy_{gen_id}", use_container_width=True):
-                                copy_to_clipboard(st.session_state.generated_posts["threads"]["english"], f"th_en_copy_{gen_id}")
+
+                            # 추천 배지
+                            st.markdown("**🗣️ Engagement Booster!** - Question-driven for max replies")
+
+                            if st.button("📋 Copy", key=f"threads_english_copy_{gen_id}", use_container_width=True):
+                                copy_to_clipboard(st.session_state.generated_posts["threads"]["english"], f"threads_english_copy_{gen_id}")
                                 st.success("✅ 복사 완료!")
 
         except Exception as e:
@@ -540,13 +582,17 @@ elif not should_generate and st.session_state.generated_posts:
                         "English Version",
                         value=st.session_state.generated_posts["x"]["english"],
                         height=150,
-                        key=f"x_en_textarea_display_{gen_id}",
+                        key=f"x_english_textarea_display_{gen_id}",
                         label_visibility="collapsed",
                         disabled=True
                     )
                     st.code(st.session_state.generated_posts["x"]["english"], language=None)
-                    if st.button("📋 Copy", key=f"x_en_copy_display_{gen_id}", use_container_width=True):
-                        copy_to_clipboard(st.session_state.generated_posts["x"]["english"], f"x_en_copy_display_{gen_id}")
+
+                    # 추천 배지
+                    st.markdown("**💫 글로벌 팬 추천!** - Gen Z Slang & 바이럴 최적화")
+
+                    if st.button("📋 Copy", key=f"x_english_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["x"]["english"], f"x_english_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             with tab_x_kr_d:
@@ -555,13 +601,17 @@ elif not should_generate and st.session_state.generated_posts:
                         "Korean Version",
                         value=st.session_state.generated_posts["x"]["korean"],
                         height=150,
-                        key=f"x_kr_textarea_display_{gen_id}",
+                        key=f"x_korean_textarea_display_{gen_id}",
                         label_visibility="collapsed",
                         disabled=True
                     )
                     st.code(st.session_state.generated_posts["x"]["korean"], language=None)
-                    if st.button("📋 Copy", key=f"x_kr_copy_display_{gen_id}", use_container_width=True):
-                        copy_to_clipboard(st.session_state.generated_posts["x"]["korean"], f"x_kr_copy_display_{gen_id}")
+
+                    # 추천 배지
+                    st.markdown("**🔥 이 카피 추천!** - 국내 커뮤니티 화제성 최적화")
+
+                    if st.button("📋 Copy", key=f"x_korean_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["x"]["korean"], f"x_korean_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             st.divider()
@@ -580,13 +630,17 @@ elif not should_generate and st.session_state.generated_posts:
                         "English Version",
                         value=st.session_state.generated_posts["instagram"]["english"],
                         height=300,
-                        key=f"instagram_en_textarea_display_{gen_id}",
+                        key=f"instagram_english_textarea_display_{gen_id}",
                         label_visibility="collapsed",
                         disabled=True
                     )
                     st.code(st.session_state.generated_posts["instagram"]["english"], language=None)
-                    if st.button("📋 Copy", key=f"instagram_en_copy_display_{gen_id}", use_container_width=True):
-                        copy_to_clipboard(st.session_state.generated_posts["instagram"]["english"], f"instagram_en_copy_display_{gen_id}")
+
+                    # 추천 배지
+                    st.markdown("**🌟 Global Story Pick!** - Full 3-para narrative & relatability")
+
+                    if st.button("📋 Copy", key=f"instagram_english_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["instagram"]["english"], f"instagram_english_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             with tab_ig_kr_d:
@@ -595,13 +649,17 @@ elif not should_generate and st.session_state.generated_posts:
                         "Korean Version",
                         value=st.session_state.generated_posts["instagram"]["korean"],
                         height=300,
-                        key=f"instagram_kr_textarea_display_{gen_id}",
+                        key=f"instagram_korean_textarea_display_{gen_id}",
                         label_visibility="collapsed",
                         disabled=True
                     )
                     st.code(st.session_state.generated_posts["instagram"]["korean"], language=None)
-                    if st.button("📋 Copy", key=f"instagram_kr_copy_display_{gen_id}", use_container_width=True):
-                        copy_to_clipboard(st.session_state.generated_posts["instagram"]["korean"], f"instagram_kr_copy_display_{gen_id}")
+
+                    # 추천 배지
+                    st.markdown("**✨ 감성 스토리 추천!** - 3문단 완전 서사 & 공감 포인트")
+
+                    if st.button("📋 Copy", key=f"instagram_korean_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["instagram"]["korean"], f"instagram_korean_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             st.divider()
@@ -620,13 +678,17 @@ elif not should_generate and st.session_state.generated_posts:
                         "English Version",
                         value=st.session_state.generated_posts["threads"]["english"],
                         height=300,
-                        key=f"threads_en_textarea_display_{gen_id}",
+                        key=f"threads_english_textarea_display_{gen_id}",
                         label_visibility="collapsed",
                         disabled=True
                     )
                     st.code(st.session_state.generated_posts["threads"]["english"], language=None)
-                    if st.button("📋 Copy", key=f"threads_en_copy_display_{gen_id}", use_container_width=True):
-                        copy_to_clipboard(st.session_state.generated_posts["threads"]["english"], f"threads_en_copy_display_{gen_id}")
+
+                    # 추천 배지
+                    st.markdown("**🗣️ Engagement Booster!** - Question-driven for max replies")
+
+                    if st.button("📋 Copy", key=f"threads_english_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["threads"]["english"], f"threads_english_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             with tab_th_kr_d:
@@ -635,13 +697,17 @@ elif not should_generate and st.session_state.generated_posts:
                         "Korean Version",
                         value=st.session_state.generated_posts["threads"]["korean"],
                         height=300,
-                        key=f"threads_kr_textarea_display_{gen_id}",
+                        key=f"threads_korean_textarea_display_{gen_id}",
                         label_visibility="collapsed",
                         disabled=True
                     )
                     st.code(st.session_state.generated_posts["threads"]["korean"], language=None)
-                    if st.button("📋 Copy", key=f"threads_kr_copy_display_{gen_id}", use_container_width=True):
-                        copy_to_clipboard(st.session_state.generated_posts["threads"]["korean"], f"threads_kr_copy_display_{gen_id}")
+
+                    # 추천 배지
+                    st.markdown("**💬 팬 참여 추천!** - 질문형 구조로 댓글 폭발 유도")
+
+                    if st.button("📋 Copy", key=f"threads_korean_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["threads"]["korean"], f"threads_korean_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             st.divider()
