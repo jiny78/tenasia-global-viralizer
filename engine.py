@@ -73,17 +73,21 @@ RESPONSE_SCHEMA = {
 }
 
 
-def retry_with_exponential_backoff(func, max_retries=None, progress_callback=None):
+def safe_generate_content(model, prompt, max_retries=None, progress_callback=None):
     """
-    지수 백오프(Exponential Backoff) 방식으로 함수 실행을 재시도합니다.
+    안정적인 콘텐츠 생성 래퍼 함수
+
+    500 서버 에러, 429 쿼터 에러, 503 서비스 불가 에러 발생 시
+    Exponential Backoff 방식으로 재시도합니다.
 
     Args:
-        func: 실행할 함수
+        model: genai.GenerativeModel 인스턴스
+        prompt: 생성할 프롬프트
         max_retries: 최대 재시도 횟수 (기본값: config.MAX_RETRIES)
         progress_callback: 재시도 진행 상황을 알리는 콜백 함수 (선택)
 
     Returns:
-        함수 실행 결과
+        생성된 응답
 
     Raises:
         마지막 시도에서 발생한 예외
@@ -95,18 +99,34 @@ def retry_with_exponential_backoff(func, max_retries=None, progress_callback=Non
 
     for attempt in range(max_retries):
         try:
-            return func()
-        except (google_exceptions.InternalServerError,
-                google_exceptions.ResourceExhausted,
-                google_exceptions.ServiceUnavailable) as e:
+            # API 호출
+            response = model.generate_content(prompt)
+
+            # 응답 유효성 검증
+            if not response or not response.text:
+                raise Exception("Empty response from API")
+
+            return response
+
+        except (google_exceptions.InternalServerError,      # 500 에러
+                google_exceptions.ResourceExhausted,        # 429 쿼터 에러
+                google_exceptions.ServiceUnavailable,       # 503 에러
+                google_exceptions.DeadlineExceeded) as e:   # 타임아웃 에러
+
             last_exception = e
+            error_type = type(e).__name__
 
             # 마지막 시도인 경우 예외 발생
             if attempt == max_retries - 1:
-                raise
+                raise Exception(f"API 호출 실패 (재시도 {max_retries}회 모두 실패): {error_type} - {str(e)}")
 
             # 지수 백오프: BASE_WAIT_TIME * (2 ** attempt)
+            # 1차: 2초, 2차: 4초, 3차: 8초
             wait_time = config.BASE_WAIT_TIME * (2 ** attempt)
+
+            # 429 에러(쿼터 초과)의 경우 더 긴 대기
+            if isinstance(e, google_exceptions.ResourceExhausted):
+                wait_time = wait_time * 2  # 2배 더 대기
 
             # 진행 상황 콜백 호출
             if progress_callback:
@@ -114,20 +134,22 @@ def retry_with_exponential_backoff(func, max_retries=None, progress_callback=Non
                     attempt=attempt + 1,
                     max_retries=max_retries,
                     wait_time=wait_time,
-                    error=str(e)
+                    error=f"{error_type}: {str(e)}"
                 )
 
+            # 대기
             time.sleep(wait_time)
+
         except Exception as e:
             # 재시도 불가능한 에러는 즉시 발생
-            raise
+            raise Exception(f"재시도 불가능한 에러: {type(e).__name__} - {str(e)}")
 
     # 여기 도달하면 안 되지만, 안전을 위해
     if last_exception:
         raise last_exception
 
 
-def _original_retry_with_exponential_backoff(func, max_retries=3, progress_callback=None):
+def retry_with_exponential_backoff(func, max_retries=None, progress_callback=None):
     """
     지수 백오프(Exponential Backoff) 방식으로 함수 실행을 재시도합니다.
 
@@ -252,49 +274,66 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 
 ### 🐦 X (Twitter) - Punchy & Viral
 
+**🚨 필수 요구사항: 클릭을 유발하는 강력한 훅(Hook)을 포함할 것! 🚨**
+
 **English Version:**
-- **길이**: 140-200자 (280자 제한 안에서 짧게)
-- **구조**: 가장 논란이 되거나 화제가 될 **'한 줄'**을 최상단에 배치
-- **목표**: 클릭 유도, RT 유발
-- **톤**: Gen Z Slang 적극 활용 (slay, iconic, ate, serving, no cap, it's giving, the way..., not me..., bestie, main character energy)
-- **번역체 금지**: 완전한 네이티브 영어
-- **해시태그**: 3-4개 (마지막에)
-- **예시**: "Not [Name] absolutely SLAYING at [Event]! 😭 The way they served... iconic behavior fr fr 💅 #KPop #[Name] #Viral"
+- **길이**: 정확히 140-200자 사이 (엄수!)
+- **구조**:
+  - **첫 줄**: 가장 논란적이거나 충격적인 '한 줄' 훅 (예: "WAIT WHAT?!", "NOT THIS!", "I'M SCREAMING")
+  - **두 번째 줄**: 핵심 내용 (Gen Z Slang 필수)
+  - **마지막**: 해시태그
+- **목표**: 즉각적인 클릭 유도, 대량 RT 유발
+- **톤**: Gen Z Slang 적극 활용 (slay, iconic, ate, serving, no cap, it's giving, the way..., not me..., bestie, main character energy, fr fr, ngl, literally)
+- **번역체 절대 금지**: 100% 네이티브 영어 (미국/영국 10대가 쓰는 말투)
+- **해시태그**: 정확히 3-4개 (마지막에)
+- **예시**: "WAIT- [Name] just DID THAT?! 😭 Not them absolutely SLAYING at [Event] and serving iconic behavior... the way I SCREAMED 💅 #KPop #[Name] #Viral"
 
 **Korean Version:**
-- **길이**: 140-200자
-- **구조**: 속보 느낌의 긴박함 또는 팬들의 공감을 사는 친근한 말투 (~함, ~임)
-- **목표**: 클릭 유도, RT 유발
-- **톤**: 국내 커뮤니티에서 화제가 될 법한 Hook (예: "ㄹㅇ 미쳤다...", "이거 실화임??")
-- **적절한 '짤' 설명**: "이 표정 실화냐", "미쳤다 진짜" 등
-- **해시태그**: 3-4개 (반드시 #{site_name} 포함)
-- **예시**: "ㄹㅇ 미쳤다... [이름]이 [이벤트]에서 보여준 이 모습 실화임? 🔥 팬들 다 기절각ㅋㅋㅋ #{site_name} #[이름] #화제"
+- **길이**: 정확히 140-200자 사이 (엄수!)
+- **구조**:
+  - **첫 줄**: 충격적인 훅 (예: "ㄹㅇ 실화?", "미쳤다...", "헐 대박", "이거 진짜??")
+  - **두 번째 줄**: 핵심 내용 + 리액션
+  - **마지막**: 해시태그
+- **목표**: 즉각적인 클릭 유도, 대량 RT 유발
+- **톤**: 국내 커뮤니티 화제성 폭발 스타일 (디시, 트위터, 인스타 댓글 톤)
+- **리액션 필수 포함**: "ㄹㅇ", "실화?", "미쳤다", "ㅋㅋㅋ", "ㅠㅠ", "기절각" 등
+- **해시태그**: 정확히 3-4개 (반드시 #{site_name} 첫 번째에 포함!)
+- **예시**: "ㄹㅇ 미쳤다... [이름]이 [이벤트]에서 이 정도 폼은 실화임?? 🔥 팬들 다 기절각ㅋㅋㅋ 이게 바로 레전드 #{site_name} #[이름] #화제"
 
 ### 📸 Instagram - Long-form Storytelling
 
+**🚨 필수 요구사항: 최소 3문단 이상의 완전한 서사(Narrative)를 작성할 것! 🚨**
+**⚠️  분량 미달 시 재작성 필요! 각 문단은 최소 2-3문장 이상!**
+
 **English Version:**
-- **길이**: 최소 3문단 이상 (줄바꿈으로 가독성 확보)
-- **구조**:
-  - 1문단: 감성적인 Hook + 이모지
-  - 2-3문단: 기사 속 구체적인 인용문, 차트 기록, 숫자 등을 활용한 스토리텔링
-  - 마지막 문단: 감동적인 마무리 + 질문
-- **톤**: Gen Z 감성 + 고급스러운 어휘
-- **번역체 금지**: 현지 인플루언서의 자연스러운 말투
-- **해시태그**: 10개 (마지막 줄에 모두 배치)
+- **필수 길이**: **최소 3문단** (각 문단 2-3문장 이상, 총 8-10문장)
+- **줄바꿈**: 각 문단 사이 반드시 빈 줄 삽입 (가독성 극대화)
+- **구조 (엄격히 준수)**:
+  - **1문단**: 감성적인 Hook + 이모지 (기사의 가장 감동적인 순간 포착)
+  - **2문단**: 기사 속 **구체적 인용문** 또는 **구체적 숫자/기록** 활용한 스토리텔링 (예: "reached #1 in 50 countries", "10 million views in 24 hours")
+  - **3문단**: 아티스트의 여정, 노력, 의미 등을 감동적으로 풀어쓰기
+  - **4문단 (마무리)**: 감동적인 마무리 + 팬들에게 던지는 질문 + 이모지
+- **톤**: Gen Z 감성 + 고급스러운 어휘 (casual하지만 sophisticated)
+- **번역체 절대 금지**: 100% 네이티브 인플루언서 말투
+- **해시태그**: 정확히 10개 (마지막 줄에 한 번에 배치)
+- **이모지**: 각 문단마다 1-2개 전략적 배치
 - **예시**:
   ```
-  ✨ When [Artist] said "[quote from article]"... I felt that. 💫
+  ✨ When [Artist] said "[actual quote from article]"... I felt that deep in my soul. 💫
 
-  Their journey from [specific detail] to [achievement with numbers] is literally the definition of dedication. The way they [action] while maintaining [quality] shows true artistry at its finest.
+  Their journey from [specific starting point with numbers] to [achievement with exact stats] is literally the definition of dedication and artistry. In just [timeframe], they've managed to [specific accomplishment], proving that talent and hard work truly pay off.
 
-  This is why we stan real talent. 👑 What moment touched your heart the most?
+  What strikes me most is how they [specific quality/action from article] while staying true to themselves. That kind of authenticity is rare in this industry, and it's exactly why millions of people around the world connect with their music on such a personal level.
+
+  This is what real artistry looks like. 👑 Which moment from their journey touched your heart the most? Drop a 💜 if you're proud!
 
   #KPop #[Artist] #TenAsia #Viral #Music #Inspiration #Icon #Goals #Legend #Masterpiece
   ```
 
 **Korean Version:**
-- **길이**: 최소 3문단 이상 (줄바꿈으로 가독성 확보)
-- **구조**:
+- **필수 길이**: **최소 3문단** (각 문단 2-3문장 이상, 총 8-10문장)
+- **줄바꿈**: 각 문단 사이 반드시 빈 줄 삽입
+- **구조 (엄격히 준수)**:
   - 1문단: 감성적인 Hook + 이모지
   - 2-3문단: 기사 속 구체적인 인용문, 차트 기록, 숫자 등을 활용한 스토리텔링
   - 마지막 문단: 감동적인 마무리 + 질문
@@ -368,24 +407,6 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         # 진행 상황 표시
         yield {"platform": "all", "language": "all", "status": "generating", "content": None}
 
-        # 재시도 진행 상황을 알리는 콜백
-        def retry_progress_callback(attempt, max_retries, wait_time, error):
-            yield {
-                "platform": "retry",
-                "status": "retrying",
-                "attempt": attempt,
-                "max_retries": max_retries,
-                "wait_time": wait_time,
-                "error": error
-            }
-
-        # 재시도 로직이 포함된 API 호출
-        def api_call():
-            response = model.generate_content(unified_prompt)
-            if not response or not response.text:
-                raise Exception("Empty response from API")
-            return response
-
         # 재시도 진행 상황을 yield하기 위한 wrapper
         retry_attempts = []
 
@@ -397,9 +418,11 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
                 "error": error
             })
 
-        response = retry_with_exponential_backoff(
-            api_call,
-            max_retries=3,
+        # 안전한 API 호출 (Exponential Backoff 포함)
+        response = safe_generate_content(
+            model,
+            unified_prompt,
+            max_retries=config.MAX_RETRIES,
             progress_callback=progress_callback
         )
 
