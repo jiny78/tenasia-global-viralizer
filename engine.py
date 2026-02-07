@@ -12,6 +12,104 @@ load_dotenv()
 # Configure Gemini API
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
+
+# ========================================
+# 모델 진단 및 자동 선택 함수
+# ========================================
+
+def list_available_models():
+    """
+    사용 가능한 모든 Gemini 모델 목록을 조회하고 출력합니다.
+
+    Returns:
+        사용 가능한 모델 이름 리스트
+    """
+    try:
+        models = genai.list_models()
+        available = []
+
+        print("\n" + "=" * 70)
+        print("🔍 현재 API 키로 접근 가능한 Gemini 모델 목록:")
+        print("=" * 70)
+
+        for m in models:
+            # generateContent를 지원하는 모델만 필터링
+            if 'generateContent' in m.supported_generation_methods:
+                # models/ 접두사 제거
+                model_name = m.name.replace('models/', '')
+                available.append(model_name)
+                print(f"  ✅ {model_name}")
+
+        print("=" * 70)
+        print(f"📊 총 {len(available)}개의 모델이 사용 가능합니다.\n")
+
+        return available
+
+    except Exception as e:
+        print(f"⚠️  모델 목록 조회 실패: {str(e)}")
+        return []
+
+
+def get_best_available_model(preferred_model, fallback_keywords=['flash', 'pro'], available_models=None):
+    """
+    선호하는 모델을 찾거나, 사용 가능한 모델 중 최선을 자동 선택합니다.
+
+    Args:
+        preferred_model: 선호하는 모델 이름
+        fallback_keywords: fallback 시 검색할 키워드 리스트
+        available_models: 사용 가능한 모델 리스트 (없으면 자동 조회)
+
+    Returns:
+        tuple: (선택된 모델 이름, 선택 이유)
+    """
+    # 사용 가능한 모델 목록 가져오기
+    if available_models is None:
+        available_models = list_available_models()
+
+    if not available_models:
+        return None, "사용 가능한 모델이 없습니다"
+
+    # models/ 접두사 제거
+    clean_preferred = preferred_model.replace('models/', '')
+
+    print(f"🎯 요청된 모델: {clean_preferred}")
+
+    # 1. 정확히 일치하는 모델 찾기
+    if clean_preferred in available_models:
+        print(f"✅ 요청된 모델 발견: {clean_preferred}")
+        return clean_preferred, "정확히 일치"
+
+    # 2. 변형 버전 시도 (-002, -latest, -001 등)
+    variants = [
+        f"{clean_preferred}-002",
+        f"{clean_preferred}-latest",
+        f"{clean_preferred}-001",
+        f"{clean_preferred}-exp"
+    ]
+
+    for variant in variants:
+        if variant in available_models:
+            print(f"✅ 변형 모델 발견: {variant}")
+            return variant, f"변형 버전 ({variant})"
+
+    # 3. 키워드로 자동 선택
+    print(f"🔍 키워드로 모델 검색 중: {fallback_keywords}")
+    for keyword in fallback_keywords:
+        for model in available_models:
+            if keyword in model.lower():
+                print(f"✅ 키워드 매칭 모델 발견: {model} (키워드: {keyword})")
+                return model, f"키워드 매칭 ({keyword})"
+
+    # 4. 첫 번째 사용 가능한 모델 반환
+    first_model = available_models[0]
+    print(f"⚠️  Fallback: 첫 번째 모델 사용 - {first_model}")
+    return first_model, "첫 번째 사용 가능 모델"
+
+
+# 앱 시작 시 모델 목록 진단 실행
+print("\n🚀 Global Viralizer Engine 시작")
+AVAILABLE_MODELS = list_available_models()
+
 # JSON 스키마 정의
 RESPONSE_SCHEMA = {
     "type": "object",
@@ -210,17 +308,27 @@ def safe_generate_content(model, prompt, max_retries=None, progress_callback=Non
         except google_exceptions.NotFound as e:
             # 404 NotFound 에러 (모델을 찾을 수 없음)
             error_msg = str(e)
+            model_name = "알 수 없음"
+
             if "models/" in error_msg:
-                model_name = error_msg.split("models/")[1].split(" ")[0]
-                raise Exception(
-                    f"모델을 찾을 수 없습니다: {model_name}\n\n"
-                    f"💡 해결 방법:\n"
-                    f"1. config.py의 모델 이름을 확인하세요\n"
-                    f"2. Fallback 모델({config.FALLBACK_MODEL})이 자동으로 적용되어야 합니다\n"
-                    f"3. API 키 권한을 확인하세요"
-                )
-            else:
-                raise Exception(f"모델 NotFound 에러: {str(e)}")
+                try:
+                    model_name = error_msg.split("models/")[1].split(" ")[0]
+                except:
+                    pass
+
+            # 사용 가능한 모델 목록 가져오기
+            available = list_available_models() if not AVAILABLE_MODELS else AVAILABLE_MODELS
+
+            raise Exception(
+                f"❌ 모델을 찾을 수 없습니다: {model_name}\n\n"
+                f"📋 현재 사용 가능한 모델 목록:\n" +
+                "\n".join(f"  ✅ {m}" for m in available[:10]) +
+                (f"\n  ... 외 {len(available)-10}개" if len(available) > 10 else "") +
+                f"\n\n💡 해결 방법:\n"
+                f"1. 위 목록의 모델 중 하나를 config.py에 설정하세요\n"
+                f"2. 자동 모델 선택 로직이 작동하지 않았습니다\n"
+                f"3. API 키 권한을 확인하세요"
+            )
 
         except Exception as e:
             # 재시도 불가능한 에러는 즉시 발생
@@ -316,9 +424,32 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         }
 
         # 비디오 프레임이 있으면 VIDEO_MODEL 사용, 없으면 ARTICLE_MODEL 사용
-        model_name = config.VIDEO_MODEL if video_frames else config.ARTICLE_MODEL
+        preferred_model = config.VIDEO_MODEL if video_frames else config.ARTICLE_MODEL
 
-        # Gemini 모델 초기화 (Fallback 로직 포함)
+        # 최적 모델 자동 선택
+        print(f"\n{'='*70}")
+        print(f"🎬 컨텐츠 타입: {'비디오 프레임 분석' if video_frames else '텍스트 기사 분석'}")
+        print(f"{'='*70}")
+
+        model_name, selection_reason = get_best_available_model(
+            preferred_model,
+            fallback_keywords=['flash', 'pro', 'gemini'],
+            available_models=AVAILABLE_MODELS
+        )
+
+        if not model_name:
+            # 사용 가능한 모델이 전혀 없는 경우
+            raise Exception(
+                "❌ 사용 가능한 Gemini 모델을 찾을 수 없습니다.\n\n"
+                "💡 해결 방법:\n"
+                "1. API 키가 올바르게 설정되었는지 확인\n"
+                "2. API 키에 Gemini API 접근 권한이 있는지 확인\n"
+                "3. https://makersuite.google.com/app/apikey 에서 키 확인"
+            )
+
+        print(f"📌 선택된 모델: {model_name} ({selection_reason})")
+
+        # Gemini 모델 초기화
         try:
             model = genai.GenerativeModel(
                 model_name,
@@ -327,14 +458,19 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
             )
             print(f"✅ 모델 로드 성공: {model_name}")
         except Exception as e:
-            # 모델을 찾을 수 없으면 fallback 모델 사용
+            # 최후의 fallback
             print(f"⚠️  {model_name} 모델 로드 실패: {str(e)}")
-            print(f"🔄 Fallback 모델로 전환: {config.FALLBACK_MODEL}")
-            model_name = config.FALLBACK_MODEL
-            model = genai.GenerativeModel(
-                model_name,
-                safety_settings=safety_settings,
-                generation_config=generation_config
+
+            # 사용 가능한 모델 목록 출력
+            print("\n📋 사용 가능한 모델 목록:")
+            for i, m in enumerate(AVAILABLE_MODELS, 1):
+                print(f"   {i}. {m}")
+
+            raise Exception(
+                f"❌ 모델 로드 실패: {model_name}\n\n"
+                f"💡 사용 가능한 모델 목록:\n" +
+                "\n".join(f"  • {m}" for m in AVAILABLE_MODELS[:5]) +
+                (f"\n  ... 외 {len(AVAILABLE_MODELS)-5}개" if len(AVAILABLE_MODELS) > 5 else "")
             )
 
         # 영문 사이트명 매핑

@@ -9,14 +9,24 @@ Global Viralizer 설정 파일
 # ========================================
 
 # 텍스트 분석용 모델 (기사 내용 분석 및 SNS 게시물 생성)
+# engine.py가 자동으로 사용 가능한 변형 버전을 찾습니다
+# (예: gemini-2.0-flash-002, gemini-2.0-flash-latest 등)
 ARTICLE_MODEL = "gemini-2.0-flash"
 
 # 멀티모달 프레임 분석용 모델 (비디오 콘텐츠 분석)
+# engine.py가 자동으로 사용 가능한 변형 버전을 찾습니다
+# (예: gemini-1.5-flash-002, gemini-1.5-flash-latest 등)
 VIDEO_MODEL = "gemini-1.5-flash"
 
 # Fallback 모델 (모델을 찾을 수 없을 때 사용)
-# gemini-1.5-flash는 가장 범용적이고 안정적인 모델
+# 실제로는 engine.py의 자동 선택 로직이 우선 적용됩니다
 FALLBACK_MODEL = "gemini-1.5-flash"
+
+# 모델 자동 선택 로직:
+# 1. 정확한 이름 매칭 (예: gemini-1.5-flash)
+# 2. 변형 버전 시도 (-002, -latest, -001, -exp)
+# 3. 키워드 매칭 (flash, pro, gemini)
+# 4. 첫 번째 사용 가능한 모델
 
 
 # ========================================
