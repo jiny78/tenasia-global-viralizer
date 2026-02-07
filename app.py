@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from engine import generate_sns_posts_streaming
 from extractor import extract_article
 
@@ -9,6 +10,25 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# 클립보드 복사 함수
+def copy_to_clipboard(text, button_key):
+    """JavaScript를 사용해 클립보드에 텍스트 복사"""
+    # HTML과 JavaScript를 사용해 클립보드에 복사
+    copy_js = f"""
+    <script>
+    function copyToClipboard_{button_key}() {{{{
+        const text = {repr(text)};
+        navigator.clipboard.writeText(text).then(function() {{{{
+            console.log('Copied to clipboard successfully!');
+        }}}}, function(err) {{{{
+            console.error('Could not copy text: ', err);
+        }}}});
+    }}}}
+    copyToClipboard_{button_key}();
+    </script>
+    """
+    components.html(copy_js, height=0)
 
 # 모바일 최적화 CSS
 st.markdown("""
@@ -329,6 +349,7 @@ if should_generate and content_to_use.strip():
                                         )
                                         st.code(st.session_state.generated_posts["x"]["english"], language=None)
                                         if st.button("📋 Copy", key=f"x_en_copy_{gen_id}", use_container_width=True):
+                                            copy_to_clipboard(st.session_state.generated_posts["x"]["english"], f"x_en_copy_{gen_id}")
                                             st.success("✅ 복사 완료!")
 
                                     with tab_x_kr:
@@ -342,6 +363,7 @@ if should_generate and content_to_use.strip():
                                         )
                                         st.code(st.session_state.generated_posts["x"]["korean"], language=None)
                                         if st.button("📋 Copy", key=f"x_kr_copy_{gen_id}", use_container_width=True):
+                                            copy_to_clipboard(st.session_state.generated_posts["x"]["korean"], f"x_kr_copy_{gen_id}")
                                             st.success("✅ 복사 완료!")
 
                     elif platform == "instagram" and language:
@@ -373,6 +395,7 @@ if should_generate and content_to_use.strip():
                                         )
                                         st.code(st.session_state.generated_posts["instagram"]["english"], language=None)
                                         if st.button("📋 Copy", key=f"instagram_en_copy_{gen_id}", use_container_width=True):
+                                            copy_to_clipboard(st.session_state.generated_posts["instagram"]["english"], f"instagram_en_copy_{gen_id}")
                                             st.success("✅ 복사 완료!")
 
                                     with tab_ig_kr:
@@ -386,6 +409,7 @@ if should_generate and content_to_use.strip():
                                         )
                                         st.code(st.session_state.generated_posts["instagram"]["korean"], language=None)
                                         if st.button("📋 Copy", key=f"instagram_kr_copy_{gen_id}", use_container_width=True):
+                                            copy_to_clipboard(st.session_state.generated_posts["instagram"]["korean"], f"instagram_kr_copy_{gen_id}")
                                             st.success("✅ 복사 완료!")
 
                     elif platform == "threads" and language:
@@ -417,6 +441,7 @@ if should_generate and content_to_use.strip():
                                         )
                                         st.code(st.session_state.generated_posts["threads"]["english"], language=None)
                                         if st.button("📋 Copy", key=f"threads_en_copy_{gen_id}", use_container_width=True):
+                                            copy_to_clipboard(st.session_state.generated_posts["threads"]["english"], f"threads_en_copy_{gen_id}")
                                             st.success("✅ 복사 완료!")
 
                                     with tab_th_kr:
@@ -430,6 +455,7 @@ if should_generate and content_to_use.strip():
                                         )
                                         st.code(st.session_state.generated_posts["threads"]["korean"], language=None)
                                         if st.button("📋 Copy", key=f"threads_kr_copy_{gen_id}", use_container_width=True):
+                                            copy_to_clipboard(st.session_state.generated_posts["threads"]["korean"], f"threads_kr_copy_{gen_id}")
                                             st.success("✅ 복사 완료!")
 
         except Exception as e:
@@ -465,6 +491,7 @@ elif not should_generate and st.session_state.generated_posts:
                     )
                     st.code(st.session_state.generated_posts["x"]["english"], language=None)
                     if st.button("📋 Copy", key=f"x_en_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["x"]["english"], f"x_en_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             with tab_x_kr_d:
@@ -479,6 +506,7 @@ elif not should_generate and st.session_state.generated_posts:
                     )
                     st.code(st.session_state.generated_posts["x"]["korean"], language=None)
                     if st.button("📋 Copy", key=f"x_kr_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["x"]["korean"], f"x_kr_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             st.divider()
@@ -503,6 +531,7 @@ elif not should_generate and st.session_state.generated_posts:
                     )
                     st.code(st.session_state.generated_posts["instagram"]["english"], language=None)
                     if st.button("📋 Copy", key=f"instagram_en_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["instagram"]["english"], f"instagram_en_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             with tab_ig_kr_d:
@@ -517,6 +546,7 @@ elif not should_generate and st.session_state.generated_posts:
                     )
                     st.code(st.session_state.generated_posts["instagram"]["korean"], language=None)
                     if st.button("📋 Copy", key=f"instagram_kr_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["instagram"]["korean"], f"instagram_kr_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             st.divider()
@@ -541,6 +571,7 @@ elif not should_generate and st.session_state.generated_posts:
                     )
                     st.code(st.session_state.generated_posts["threads"]["english"], language=None)
                     if st.button("📋 Copy", key=f"threads_en_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["threads"]["english"], f"threads_en_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             with tab_th_kr_d:
@@ -555,6 +586,7 @@ elif not should_generate and st.session_state.generated_posts:
                     )
                     st.code(st.session_state.generated_posts["threads"]["korean"], language=None)
                     if st.button("📋 Copy", key=f"threads_kr_copy_display_{gen_id}", use_container_width=True):
+                        copy_to_clipboard(st.session_state.generated_posts["threads"]["korean"], f"threads_kr_copy_display_{gen_id}")
                         st.success("✅ 복사 완료!")
 
             st.divider()

@@ -24,8 +24,27 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         {"platform": "x", "language": "english", "status": "completed", "content": "..."}
     """
     try:
+        # 안전 설정 및 생성 설정
+        safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ]
+
+        generation_config = {
+            "temperature": 0.9,
+            "top_p": 0.95,
+            "top_k": 40,
+            "max_output_tokens": 2048,
+        }
+
         # Gemini 모델 초기화
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel(
+            'gemini-2.5-flash',
+            safety_settings=safety_settings,
+            generation_config=generation_config
+        )
 
         # English 페르소나
         english_instruction = """당신은 K-엔터 전문 글로벌 에디터입니다.
@@ -66,8 +85,11 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
 
 게시물만 작성 (설명 없이):"""
 
-        x_english_response = model.generate_content(x_english_prompt
-        )
+        x_english_response = model.generate_content(x_english_prompt)
+
+        # 응답 확인
+        if not x_english_response or not x_english_response.text:
+            raise Exception("X English: Empty response from API")
 
         yield {"platform": "x", "language": "english", "status": "completed", "content": x_english_response.text.strip()}
 
@@ -220,7 +242,9 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
         yield {"platform": "all", "status": "completed", "model": "gemini-2.5-flash"}
 
     except Exception as e:
-        yield {"platform": "error", "status": "error", "error": str(e)}
+        import traceback
+        error_details = f"{str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+        yield {"platform": "error", "status": "error", "error": error_details}
 
 
 def generate_sns_posts(article_text: str, article_title: str = "") -> dict:
