@@ -30,6 +30,45 @@ def copy_to_clipboard(text, button_key):
     """
     components.html(copy_js, height=0)
 
+def get_viral_color(score):
+    """바이럴 점수에 따른 색상 반환"""
+    if score >= 80:
+        return "#00C853"  # 녹색
+    elif score >= 60:
+        return "#64DD17"  # 연두색
+    elif score >= 40:
+        return "#FFD600"  # 노란색
+    else:
+        return "#FF6D00"  # 주황색
+
+def display_viral_score(score, reason, language="korean"):
+    """바이럴 점수와 이유를 시각적으로 표시"""
+    color = get_viral_color(score)
+
+    # 점수 표시 (진행 바 + 숫자)
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.progress(score / 100)
+    with col2:
+        st.markdown(f"<div style='text-align: right; font-size: 1.2em; font-weight: bold; color: {color};'>{score}점</div>", unsafe_allow_html=True)
+
+    # 이유 표시 (접을 수 있는 형태)
+    with st.expander("📊 바이럴 분석 근거"):
+        st.caption(reason)
+
+def get_top_viral_pick(viral_scores, language):
+    """해당 언어에서 가장 높은 바이럴 점수를 가진 플랫폼 반환"""
+    max_score = 0
+    top_platform = None
+
+    for platform in ["x", "instagram", "threads"]:
+        score = viral_scores.get(platform, {}).get(language, 0)
+        if score > max_score:
+            max_score = score
+            top_platform = platform
+
+    return top_platform, max_score
+
 # 모바일 최적화 CSS
 st.markdown("""
 <style>
@@ -267,6 +306,16 @@ if should_generate and content_to_use.strip():
         "instagram": {"english": None, "korean": None},
         "threads": {"english": None, "korean": None}
     }
+    st.session_state.viral_scores = {
+        "x": {"english": 0, "korean": 0},
+        "instagram": {"english": 0, "korean": 0},
+        "threads": {"english": 0, "korean": 0}
+    }
+    st.session_state.viral_reasons = {
+        "x": {"english": "", "korean": ""},
+        "instagram": {"english": "", "korean": ""},
+        "threads": {"english": "", "korean": ""}
+    }
     st.session_state.generation_count += 1
 
     with col2:
@@ -393,6 +442,8 @@ if should_generate and content_to_use.strip():
                                 raise ValueError("빈 콘텐츠")
 
                             st.session_state.generated_posts[platform][language] = content
+                            st.session_state.viral_scores[platform][language] = update.get("viral_score", 0)
+                            st.session_state.viral_reasons[platform][language] = update.get("viral_reason", "")
                             completed_steps += 1
                             platform_status[platform] += 1
 
@@ -422,8 +473,24 @@ if should_generate and content_to_use.strip():
 
                     tab_x_kr, tab_x_en = st.tabs(["🇰🇷 Korean", "🇺🇸 English"])
 
+                    # 최고 바이럴 픽 찾기
+                    top_kr_platform, top_kr_score = get_top_viral_pick(st.session_state.viral_scores, "korean")
+                    top_en_platform, top_en_score = get_top_viral_pick(st.session_state.viral_scores, "english")
+
                     with tab_x_kr:
                         if st.session_state.generated_posts["x"]["korean"]:
+                            # Editor's Choice 배지 (최고 점수인 경우)
+                            if top_kr_platform == "x":
+                                st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                            # 바이럴 점수 표시
+                            st.markdown("**📈 예상 바이럴 점수**")
+                            display_viral_score(
+                                st.session_state.viral_scores["x"]["korean"],
+                                st.session_state.viral_reasons["x"]["korean"],
+                                "korean"
+                            )
+
                             st.text_area(
                                 "Korean Version",
                                 value=st.session_state.generated_posts["x"]["korean"],
@@ -443,6 +510,18 @@ if should_generate and content_to_use.strip():
 
                     with tab_x_en:
                         if st.session_state.generated_posts["x"]["english"]:
+                            # Editor's Choice 배지 (최고 점수인 경우)
+                            if top_en_platform == "x":
+                                st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                            # 바이럴 점수 표시
+                            st.markdown("**📈 예상 바이럴 점수**")
+                            display_viral_score(
+                                st.session_state.viral_scores["x"]["english"],
+                                st.session_state.viral_reasons["x"]["english"],
+                                "english"
+                            )
+
                             st.text_area(
                                 "English Version",
                                 value=st.session_state.generated_posts["x"]["english"],
@@ -471,6 +550,18 @@ if should_generate and content_to_use.strip():
 
                     with tab_ig_kr:
                         if st.session_state.generated_posts["instagram"]["korean"]:
+                            # Editor's Choice 배지 (최고 점수인 경우)
+                            if top_kr_platform == "instagram":
+                                st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                            # 바이럴 점수 표시
+                            st.markdown("**📈 예상 바이럴 점수**")
+                            display_viral_score(
+                                st.session_state.viral_scores["instagram"]["korean"],
+                                st.session_state.viral_reasons["instagram"]["korean"],
+                                "korean"
+                            )
+
                             st.text_area(
                                 "Korean Version",
                                 value=st.session_state.generated_posts["instagram"]["korean"],
@@ -490,6 +581,18 @@ if should_generate and content_to_use.strip():
 
                     with tab_ig_en:
                         if st.session_state.generated_posts["instagram"]["english"]:
+                            # Editor's Choice 배지 (최고 점수인 경우)
+                            if top_en_platform == "instagram":
+                                st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                            # 바이럴 점수 표시
+                            st.markdown("**📈 예상 바이럴 점수**")
+                            display_viral_score(
+                                st.session_state.viral_scores["instagram"]["english"],
+                                st.session_state.viral_reasons["instagram"]["english"],
+                                "english"
+                            )
+
                             st.text_area(
                                 "English Version",
                                 value=st.session_state.generated_posts["instagram"]["english"],
@@ -518,6 +621,18 @@ if should_generate and content_to_use.strip():
 
                     with tab_th_kr:
                         if st.session_state.generated_posts["threads"]["korean"]:
+                            # Editor's Choice 배지 (최고 점수인 경우)
+                            if top_kr_platform == "threads":
+                                st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                            # 바이럴 점수 표시
+                            st.markdown("**📈 예상 바이럴 점수**")
+                            display_viral_score(
+                                st.session_state.viral_scores["threads"]["korean"],
+                                st.session_state.viral_reasons["threads"]["korean"],
+                                "korean"
+                            )
+
                             st.text_area(
                                 "Korean Version",
                                 value=st.session_state.generated_posts["threads"]["korean"],
@@ -537,6 +652,18 @@ if should_generate and content_to_use.strip():
 
                     with tab_th_en:
                         if st.session_state.generated_posts["threads"]["english"]:
+                            # Editor's Choice 배지 (최고 점수인 경우)
+                            if top_en_platform == "threads":
+                                st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                            # 바이럴 점수 표시
+                            st.markdown("**📈 예상 바이럴 점수**")
+                            display_viral_score(
+                                st.session_state.viral_scores["threads"]["english"],
+                                st.session_state.viral_reasons["threads"]["english"],
+                                "english"
+                            )
+
                             st.text_area(
                                 "English Version",
                                 value=st.session_state.generated_posts["threads"]["english"],
@@ -568,6 +695,14 @@ elif not should_generate and st.session_state.generated_posts:
     with col2:
         gen_id = st.session_state.generation_count
 
+        # 바이럴 점수가 있는지 확인 (이전 세션 호환성)
+        has_viral_scores = hasattr(st.session_state, 'viral_scores') and st.session_state.viral_scores
+
+        # 최고 바이럴 픽 찾기 (점수가 있을 경우에만)
+        if has_viral_scores:
+            top_kr_platform_d, top_kr_score_d = get_top_viral_pick(st.session_state.viral_scores, "korean")
+            top_en_platform_d, top_en_score_d = get_top_viral_pick(st.session_state.viral_scores, "english")
+
         # X (Twitter)
         if st.session_state.generated_posts["x"]["english"] or st.session_state.generated_posts["x"]["korean"]:
             st.markdown("### 🐦 X (Twitter)")
@@ -578,6 +713,19 @@ elif not should_generate and st.session_state.generated_posts:
 
             with tab_x_en_d:
                 if st.session_state.generated_posts["x"]["english"]:
+                    # Editor's Choice 배지 (최고 점수인 경우)
+                    if has_viral_scores and top_en_platform_d == "x":
+                        st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                    # 바이럴 점수 표시 (있을 경우에만)
+                    if has_viral_scores:
+                        st.markdown("**📈 예상 바이럴 점수**")
+                        display_viral_score(
+                            st.session_state.viral_scores["x"]["english"],
+                            st.session_state.viral_reasons["x"]["english"],
+                            "english"
+                        )
+
                     st.text_area(
                         "English Version",
                         value=st.session_state.generated_posts["x"]["english"],
@@ -597,6 +745,19 @@ elif not should_generate and st.session_state.generated_posts:
 
             with tab_x_kr_d:
                 if st.session_state.generated_posts["x"]["korean"]:
+                    # Editor's Choice 배지 (최고 점수인 경우)
+                    if has_viral_scores and top_kr_platform_d == "x":
+                        st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                    # 바이럴 점수 표시 (있을 경우에만)
+                    if has_viral_scores:
+                        st.markdown("**📈 예상 바이럴 점수**")
+                        display_viral_score(
+                            st.session_state.viral_scores["x"]["korean"],
+                            st.session_state.viral_reasons["x"]["korean"],
+                            "korean"
+                        )
+
                     st.text_area(
                         "Korean Version",
                         value=st.session_state.generated_posts["x"]["korean"],
@@ -626,6 +787,19 @@ elif not should_generate and st.session_state.generated_posts:
 
             with tab_ig_en_d:
                 if st.session_state.generated_posts["instagram"]["english"]:
+                    # Editor's Choice 배지 (최고 점수인 경우)
+                    if has_viral_scores and top_en_platform_d == "instagram":
+                        st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                    # 바이럴 점수 표시 (있을 경우에만)
+                    if has_viral_scores:
+                        st.markdown("**📈 예상 바이럴 점수**")
+                        display_viral_score(
+                            st.session_state.viral_scores["instagram"]["english"],
+                            st.session_state.viral_reasons["instagram"]["english"],
+                            "english"
+                        )
+
                     st.text_area(
                         "English Version",
                         value=st.session_state.generated_posts["instagram"]["english"],
@@ -645,6 +819,19 @@ elif not should_generate and st.session_state.generated_posts:
 
             with tab_ig_kr_d:
                 if st.session_state.generated_posts["instagram"]["korean"]:
+                    # Editor's Choice 배지 (최고 점수인 경우)
+                    if has_viral_scores and top_kr_platform_d == "instagram":
+                        st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                    # 바이럴 점수 표시 (있을 경우에만)
+                    if has_viral_scores:
+                        st.markdown("**📈 예상 바이럴 점수**")
+                        display_viral_score(
+                            st.session_state.viral_scores["instagram"]["korean"],
+                            st.session_state.viral_reasons["instagram"]["korean"],
+                            "korean"
+                        )
+
                     st.text_area(
                         "Korean Version",
                         value=st.session_state.generated_posts["instagram"]["korean"],
@@ -674,6 +861,19 @@ elif not should_generate and st.session_state.generated_posts:
 
             with tab_th_en_d:
                 if st.session_state.generated_posts["threads"]["english"]:
+                    # Editor's Choice 배지 (최고 점수인 경우)
+                    if has_viral_scores and top_en_platform_d == "threads":
+                        st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                    # 바이럴 점수 표시 (있을 경우에만)
+                    if has_viral_scores:
+                        st.markdown("**📈 예상 바이럴 점수**")
+                        display_viral_score(
+                            st.session_state.viral_scores["threads"]["english"],
+                            st.session_state.viral_reasons["threads"]["english"],
+                            "english"
+                        )
+
                     st.text_area(
                         "English Version",
                         value=st.session_state.generated_posts["threads"]["english"],
@@ -693,6 +893,19 @@ elif not should_generate and st.session_state.generated_posts:
 
             with tab_th_kr_d:
                 if st.session_state.generated_posts["threads"]["korean"]:
+                    # Editor's Choice 배지 (최고 점수인 경우)
+                    if has_viral_scores and top_kr_platform_d == "threads":
+                        st.markdown("### 🔥 오늘의 바이럴 추천 픽!")
+
+                    # 바이럴 점수 표시 (있을 경우에만)
+                    if has_viral_scores:
+                        st.markdown("**📈 예상 바이럴 점수**")
+                        display_viral_score(
+                            st.session_state.viral_scores["threads"]["korean"],
+                            st.session_state.viral_reasons["threads"]["korean"],
+                            "korean"
+                        )
+
                     st.text_area(
                         "Korean Version",
                         value=st.session_state.generated_posts["threads"]["korean"],

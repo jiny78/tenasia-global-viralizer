@@ -559,27 +559,69 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         # 각 플랫폼/언어별로 순차적으로 yield
         # X (Twitter) - English
         yield {"platform": "x", "language": "english", "status": "generating", "content": None}
-        yield {"platform": "x", "language": "english", "status": "completed", "content": result["en"]["x"]}
+        yield {
+            "platform": "x",
+            "language": "english",
+            "status": "completed",
+            "content": result["en"]["x"],
+            "viral_score": result["viral_analysis"]["en"]["x"]["score"],
+            "viral_reason": result["viral_analysis"]["en"]["x"]["reason"]
+        }
 
         # X (Twitter) - Korean
         yield {"platform": "x", "language": "korean", "status": "generating", "content": None}
-        yield {"platform": "x", "language": "korean", "status": "completed", "content": result["kr"]["x"]}
+        yield {
+            "platform": "x",
+            "language": "korean",
+            "status": "completed",
+            "content": result["kr"]["x"],
+            "viral_score": result["viral_analysis"]["kr"]["x"]["score"],
+            "viral_reason": result["viral_analysis"]["kr"]["x"]["reason"]
+        }
 
         # Instagram - English
         yield {"platform": "instagram", "language": "english", "status": "generating", "content": None}
-        yield {"platform": "instagram", "language": "english", "status": "completed", "content": result["en"]["insta"]}
+        yield {
+            "platform": "instagram",
+            "language": "english",
+            "status": "completed",
+            "content": result["en"]["insta"],
+            "viral_score": result["viral_analysis"]["en"]["insta"]["score"],
+            "viral_reason": result["viral_analysis"]["en"]["insta"]["reason"]
+        }
 
         # Instagram - Korean
         yield {"platform": "instagram", "language": "korean", "status": "generating", "content": None}
-        yield {"platform": "instagram", "language": "korean", "status": "completed", "content": result["kr"]["insta"]}
+        yield {
+            "platform": "instagram",
+            "language": "korean",
+            "status": "completed",
+            "content": result["kr"]["insta"],
+            "viral_score": result["viral_analysis"]["kr"]["insta"]["score"],
+            "viral_reason": result["viral_analysis"]["kr"]["insta"]["reason"]
+        }
 
         # Threads - English
         yield {"platform": "threads", "language": "english", "status": "generating", "content": None}
-        yield {"platform": "threads", "language": "english", "status": "completed", "content": result["en"]["threads"]}
+        yield {
+            "platform": "threads",
+            "language": "english",
+            "status": "completed",
+            "content": result["en"]["threads"],
+            "viral_score": result["viral_analysis"]["en"]["threads"]["score"],
+            "viral_reason": result["viral_analysis"]["en"]["threads"]["reason"]
+        }
 
         # Threads - Korean
         yield {"platform": "threads", "language": "korean", "status": "generating", "content": None}
-        yield {"platform": "threads", "language": "korean", "status": "completed", "content": result["kr"]["threads"]}
+        yield {
+            "platform": "threads",
+            "language": "korean",
+            "status": "completed",
+            "content": result["kr"]["threads"],
+            "viral_score": result["viral_analysis"]["kr"]["threads"]["score"],
+            "viral_reason": result["viral_analysis"]["kr"]["threads"]["reason"]
+        }
 
         # 최종 완료 신호
         yield {"platform": "all", "status": "completed", "model": config.ARTICLE_MODEL}
