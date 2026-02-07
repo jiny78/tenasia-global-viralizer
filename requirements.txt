@@ -3,7 +3,8 @@ streamlit>=1.28.0
 python-dotenv>=1.0.0
 
 # AI & ML
-google-generativeai>=0.8.0
+# 최신 버전 필요 (gemini-2.0-flash 지원)
+google-generativeai>=0.8.3
 
 # Web Scraping & Parsing
 beautifulsoup4>=4.12.0
