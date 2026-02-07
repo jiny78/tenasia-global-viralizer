@@ -9,10 +9,11 @@ Global Viralizer 설정 파일
 # ========================================
 
 # 텍스트 분석용 모델 (기사 내용 분석 및 SNS 게시물 생성)
-ARTICLE_MODEL = "gemini-2.0-flash"
+ARTICLE_MODEL = "gemini-2.0-flash-exp"
 
 # 멀티모달 프레임 분석용 모델 (비디오 콘텐츠 분석)
-VIDEO_MODEL = "gemini-1.5-flash"
+# gemini-2.0-flash-exp는 텍스트와 이미지 모두 지원
+VIDEO_MODEL = "gemini-2.0-flash-exp"
 
 
 # ========================================
