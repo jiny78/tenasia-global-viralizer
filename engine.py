@@ -4,6 +4,7 @@ import time
 import google.generativeai as genai
 from google.api_core import exceptions as google_exceptions
 from dotenv import load_dotenv
+import config
 
 # Load environment variables
 load_dotenv()
@@ -72,7 +73,61 @@ RESPONSE_SCHEMA = {
 }
 
 
-def retry_with_exponential_backoff(func, max_retries=3, progress_callback=None):
+def retry_with_exponential_backoff(func, max_retries=None, progress_callback=None):
+    """
+    지수 백오프(Exponential Backoff) 방식으로 함수 실행을 재시도합니다.
+
+    Args:
+        func: 실행할 함수
+        max_retries: 최대 재시도 횟수 (기본값: config.MAX_RETRIES)
+        progress_callback: 재시도 진행 상황을 알리는 콜백 함수 (선택)
+
+    Returns:
+        함수 실행 결과
+
+    Raises:
+        마지막 시도에서 발생한 예외
+    """
+    if max_retries is None:
+        max_retries = config.MAX_RETRIES
+
+    last_exception = None
+
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except (google_exceptions.InternalServerError,
+                google_exceptions.ResourceExhausted,
+                google_exceptions.ServiceUnavailable) as e:
+            last_exception = e
+
+            # 마지막 시도인 경우 예외 발생
+            if attempt == max_retries - 1:
+                raise
+
+            # 지수 백오프: BASE_WAIT_TIME * (2 ** attempt)
+            wait_time = config.BASE_WAIT_TIME * (2 ** attempt)
+
+            # 진행 상황 콜백 호출
+            if progress_callback:
+                progress_callback(
+                    attempt=attempt + 1,
+                    max_retries=max_retries,
+                    wait_time=wait_time,
+                    error=str(e)
+                )
+
+            time.sleep(wait_time)
+        except Exception as e:
+            # 재시도 불가능한 에러는 즉시 발생
+            raise
+
+    # 여기 도달하면 안 되지만, 안전을 위해
+    if last_exception:
+        raise last_exception
+
+
+def _original_retry_with_exponential_backoff(func, max_retries=3, progress_callback=None):
     """
     지수 백오프(Exponential Backoff) 방식으로 함수 실행을 재시도합니다.
 
@@ -157,7 +212,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 
         # Gemini 모델 초기화
         model = genai.GenerativeModel(
-            'gemini-2.5-flash',
+            config.ARTICLE_MODEL,
             safety_settings=safety_settings,
             generation_config=generation_config
         )
@@ -391,7 +446,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         yield {"platform": "threads", "language": "korean", "status": "completed", "content": result["kr"]["threads"]}
 
         # 최종 완료 신호
-        yield {"platform": "all", "status": "completed", "model": "gemini-2.5-flash"}
+        yield {"platform": "all", "status": "completed", "model": config.ARTICLE_MODEL}
 
     except Exception as e:
         import traceback
@@ -412,7 +467,7 @@ def generate_sns_posts(article_text: str, article_title: str = "") -> dict:
     """
     try:
         # Gemini 모델 초기화
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel(config.ARTICLE_MODEL)
 
         # 기본 페르소나 및 가이드라인
         base_instruction = """당신은 K-엔터 전문 글로벌 에디터입니다.
@@ -503,7 +558,7 @@ Gen Z Slang 예시: slay, iconic, ate, serving, no cap, it's giving, the way...,
                 "instagram": instagram_response.text.strip(),
                 "threads": threads_response.text.strip()
             },
-            "model": "gemini-2.5-flash"
+            "model": config.ARTICLE_MODEL
         }
 
     except Exception as e:

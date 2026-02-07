@@ -1,6 +1,7 @@
 import requests
 from typing import Dict, Optional
 from urllib.parse import urlparse
+import config
 
 
 def get_site_name(url: str) -> str:
@@ -73,8 +74,8 @@ def extract_article(url: str) -> Dict[str, Optional[str]]:
         # Jina Reader API 사용
         jina_url = f"https://r.jina.ai/{url}"
 
-        # 타임아웃 설정 (60초)
-        response = requests.get(jina_url, timeout=60)
+        # 타임아웃 설정
+        response = requests.get(jina_url, timeout=config.API_TIMEOUT)
 
         # 응답 확인
         if response.status_code != 200:
