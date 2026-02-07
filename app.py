@@ -331,7 +331,7 @@ if should_generate and content_to_use.strip():
                     with status_container:
                         retry_info.empty()
                         progress_bar.progress(10)
-                        progress_text.text("🔄 Google Gemini AI 분석 중...")
+                        progress_text.text("🔄 기사를 분석 중...")
 
                 # 전체 완료
                 elif platform == "all" and status == "completed":
