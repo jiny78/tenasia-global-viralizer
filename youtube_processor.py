@@ -28,15 +28,26 @@ def get_youtube_info(youtube_url: str) -> Dict[str, any]:
     Raises:
         Exception: 정보 추출 실패 시
     """
+    # Shorts 감지
+    is_shorts = '/shorts/' in youtube_url
+
+    # Shorts 최적화 포맷 (낮은 해상도, 세로 영상 우선)
+    if is_shorts:
+        format_str = 'worst[ext=mp4]/worst/best[ext=mp4]/best'
+        print(f"📱 Shorts 모드: 낮은 해상도 우선 선택")
+    else:
+        format_str = 'best[ext=mp4]/best'
+
     ydl_opts = {
-        'format': 'best[ext=mp4]/best',
+        'format': format_str,
         'quiet': False,  # 디버깅을 위해 False로 변경
         'no_warnings': False,  # 경고 메시지 출력
         'extract_flat': False,
         'socket_timeout': 30,
         'ignoreerrors': False,  # 에러를 명확히 표시
-        # 추가 옵션: 더 많은 포맷 시도
-        'format_sort': ['res:480', 'ext:mp4:m4a'],  # 낮은 해상도 우선
+        # 추가 옵션
+        'geo_bypass': True,  # 지역 제한 우회 시도
+        'nocheckcertificate': True,  # SSL 인증서 검사 무시
     }
 
     try:
@@ -164,11 +175,19 @@ def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> Lis
     if num_frames is None:
         num_frames = config.MAX_FRAMES
 
+    # YouTube Shorts 감지
+    is_shorts = '/shorts/' in youtube_url
+
     # YouTube Shorts URL을 일반 URL로 변환
-    if '/shorts/' in youtube_url:
+    if is_shorts:
         video_id = youtube_url.split('/shorts/')[-1].split('?')[0]
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
-        print(f"📱 Shorts URL을 일반 URL로 변환: {youtube_url}")
+        print(f"📱 Shorts 감지: {video_id}")
+        print(f"   일반 URL로 변환: {youtube_url}")
+        # Shorts는 보통 짧으므로 프레임 수 조정
+        if num_frames > 5:
+            num_frames = 5
+            print(f"   Shorts 최적화: 프레임 수를 5개로 조정")
 
     # 1. 비디오 정보 추출
     video_info = get_youtube_info(youtube_url)
