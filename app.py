@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from engine import generate_sns_posts_streaming
 from extractor import extract_article
+from youtube_processor import extract_frames_from_youtube, get_youtube_metadata
 
 # 페이지 설정
 st.set_page_config(
@@ -160,6 +161,8 @@ if 'generation_status' not in st.session_state:
         "instagram": {"english": "pending", "korean": "pending"},
         "threads": {"english": "pending", "korean": "pending"}
     }
+if 'youtube_frames' not in st.session_state:
+    st.session_state.youtube_frames = None
 
 # 타이틀
 st.title("🌐 Global Viralizer")
@@ -173,18 +176,23 @@ with st.sidebar:
     st.info("📱 모바일에서도 완벽하게 작동합니다!")
 
     st.markdown("""
-    **방법 1: URL 입력** ⚡
+    **방법 1: 기사 URL 입력** 📰
     1. 텐아시아/한국경제 기사 URL 입력
-    2. 'Extract' 버튼 클릭
+    2. 'Extract Article' 버튼 클릭
     3. 자동으로 출처 인식 및 게시물 생성
 
-    **방법 2: 직접 입력** ✍️
-    1. 기사 내용 붙여넣기
+    **방법 2: 유튜브 쇼츠 URL** 🎬
+    1. 유튜브 쇼츠 URL 입력
+    2. 'Extract Frames' 버튼 클릭
+    3. 영상 프레임 분석하여 게시물 생성
+
+    **방법 3: 직접 입력** ✍️
+    1. 기사 내용 직접 붙여넣기
     2. 'Generate' 버튼 클릭
 
     **결과 확인** 🎉
     - 🌐 English / 🇰🇷 Korean 탭 전환
-    - 📋 코드 블록에서 복사
+    - 📋 바이럴 점수 & 근거 확인
     - X, Instagram, Threads 각 6개 생성
 
     **지원 언론사** 📰
@@ -211,22 +219,34 @@ st.markdown("""
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("📰 기사 입력")
+    st.subheader("📰 콘텐츠 입력")
 
-    # URL 입력 섹션
-    st.markdown("##### 방법 1: URL에서 자동 추출")
+    # 방법 1: 기사 URL 입력
+    st.markdown("##### 방법 1: 기사 URL 자동 추출")
     article_url = st.text_input(
         "기사 URL",
         placeholder="https://www.tenasia.co.kr/article/... 또는 https://www.hankyung.com/...",
         help="텐아시아 또는 한국경제 기사 URL을 입력하면 자동으로 출처와 내용을 추출합니다"
     )
 
-    extract_button = st.button("📥 Extract Article", type="secondary", use_container_width=True)
+    extract_article_button = st.button("📰 Extract Article", type="secondary", use_container_width=True, key="extract_article_btn")
 
     st.divider()
 
-    # 직접 입력 섹션
-    st.markdown("##### 방법 2: 직접 입력")
+    # 방법 2: 유튜브 쇼츠 URL 입력
+    st.markdown("##### 방법 2: 유튜브 쇼츠 프레임 분석")
+    youtube_url = st.text_input(
+        "유튜브 쇼츠 URL",
+        placeholder="https://www.youtube.com/shorts/... 또는 https://youtu.be/...",
+        help="유튜브 쇼츠 URL을 입력하면 영상 프레임을 분석하여 게시물을 생성합니다"
+    )
+
+    extract_youtube_button = st.button("🎬 Extract Frames", type="secondary", use_container_width=True, key="extract_youtube_btn")
+
+    st.divider()
+
+    # 방법 3: 직접 입력
+    st.markdown("##### 방법 3: 직접 입력")
 
     # 세션 상태와 연결된 입력 필드
     article_title = st.text_input(
@@ -239,7 +259,7 @@ with col1:
     article_content = st.text_area(
         "한국어 기사 내용",
         value=st.session_state.article_content,
-        height=300,
+        height=200,
         placeholder="여기에 한국어 기사 내용을 붙여넣으세요...",
         key="content_input"
     )
@@ -249,11 +269,11 @@ with col1:
 with col2:
     st.subheader("✨ 생성 결과")
 
-# Extract 버튼 클릭 시
-if extract_button:
+# 방법 1: Extract Article 버튼 클릭 시
+if extract_article_button:
     if not article_url.strip():
         with col1:
-            st.error("URL을 입력해주세요!")
+            st.error("기사 URL을 입력해주세요!")
     else:
         # 오른쪽 결과 영역에 진행 상황 표시
         with col2:
@@ -282,6 +302,67 @@ if extract_button:
                 st.error(f"❌ 추출 실패: {result['error']}")
             with col2:
                 st.error(f"❌ 추출 실패: {result['error']}")
+
+# 방법 2: Extract YouTube Frames 버튼 클릭 시
+if extract_youtube_button:
+    if not youtube_url.strip():
+        with col1:
+            st.error("유튜브 URL을 입력해주세요!")
+    else:
+        # 오른쪽 결과 영역에 진행 상황 표시
+        with col2:
+            status_container = st.container()
+            with status_container:
+                progress_info = st.info("🎬 유튜브 영상 분석 중...")
+                progress_details = st.empty()
+
+        try:
+            # 메타데이터 추출
+            progress_details.text("📊 영상 정보 가져오는 중...")
+            metadata = get_youtube_metadata(youtube_url)
+
+            with col1:
+                st.info(f"**제목:** {metadata['title'][:100]}...")
+                st.info(f"**길이:** {metadata['duration']}초")
+
+            # 프레임 추출
+            progress_details.text("🎞️ 프레임 추출 중...")
+            frames = extract_frames_from_youtube(youtube_url, num_frames=10)
+
+            with col1:
+                st.success(f"✅ {len(frames)}개 프레임 추출 완료!")
+
+            # TODO: 프레임을 engine.py로 전달하여 멀티모달 분석
+            # 현재는 텍스트 기반만 지원하므로, 임시로 메타데이터를 텍스트로 변환
+            youtube_content = f"""
+제목: {metadata['title']}
+
+설명:
+{metadata.get('description', '설명 없음')[:500]}
+
+영상 길이: {metadata['duration']}초
+조회수: {metadata.get('view_count', 0):,}회
+업로더: {metadata.get('uploader', '알 수 없음')}
+"""
+
+            # 세션 상태 업데이트
+            st.session_state.article_title = metadata['title']
+            st.session_state.article_content = youtube_content
+            st.session_state.site_name = "YouTube"
+            st.session_state.youtube_frames = frames  # 프레임 저장
+            st.session_state.auto_generate = True  # 자동 생성 플래그 설정
+
+            with col2:
+                st.success("✅ 유튜브 영상 분석 완료! SNS 게시물 생성 중...")
+
+            # 페이지 새로고침
+            st.rerun()
+
+        except Exception as e:
+            with col1:
+                st.error(f"❌ 유튜브 처리 실패: {str(e)}")
+            with col2:
+                st.error(f"❌ 유튜브 처리 실패: {str(e)}")
 
 # Generate 버튼 클릭 시 또는 자동 생성 플래그가 설정된 경우
 should_generate = generate_button or st.session_state.auto_generate
