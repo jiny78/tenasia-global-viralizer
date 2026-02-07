@@ -40,18 +40,18 @@ RESPONSE_SCHEMA = {
                 "kr": {
                     "type": "object",
                     "properties": {
-                        "x": {"type": "integer", "minimum": 1, "maximum": 10},
-                        "insta": {"type": "integer", "minimum": 1, "maximum": 10},
-                        "threads": {"type": "integer", "minimum": 1, "maximum": 10}
+                        "x": {"type": "integer", "description": "X 게시물 완성도 점수 (1-10)"},
+                        "insta": {"type": "integer", "description": "Instagram 게시물 완성도 점수 (1-10)"},
+                        "threads": {"type": "integer", "description": "Threads 게시물 완성도 점수 (1-10)"}
                     },
                     "required": ["x", "insta", "threads"]
                 },
                 "en": {
                     "type": "object",
                     "properties": {
-                        "x": {"type": "integer", "minimum": 1, "maximum": 10},
-                        "insta": {"type": "integer", "minimum": 1, "maximum": 10},
-                        "threads": {"type": "integer", "minimum": 1, "maximum": 10}
+                        "x": {"type": "integer", "description": "X post quality score (1-10)"},
+                        "insta": {"type": "integer", "description": "Instagram post quality score (1-10)"},
+                        "threads": {"type": "integer", "description": "Threads post quality score (1-10)"}
                     },
                     "required": ["x", "insta", "threads"]
                 }
