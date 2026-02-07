@@ -113,35 +113,44 @@ def get_youtube_info(youtube_url: str) -> Dict[str, any]:
             raise Exception(f"YouTube 정보 추출 실패: {error_msg}")
 
 
-def extract_frame_at_time(video_url: str, timestamp: float, output_path: str, retry: int = 3) -> bool:
+def extract_frame_at_time(video_url: str, timestamp: float, output_path: str, skip_retry: bool = True) -> bool:
     """
     ffmpeg를 사용하여 특정 시간의 프레임을 추출합니다.
+    Skip-and-Retry: 실패 시 1초씩 뒤로 이동하여 재시도
 
     Args:
         video_url: 비디오 스트림 URL
         timestamp: 추출할 시간 (초)
         output_path: 저장할 이미지 경로
-        retry: 재시도 횟수 (기본값: 3)
+        skip_retry: Skip-and-Retry 활성화 여부 (기본값: True)
 
     Returns:
         성공 여부 (True/False)
     """
-    for attempt in range(retry):
+    # Skip-and-Retry: 0초, +1초, +2초, +3초 시도
+    retry_offsets = [0, 1, 2, 3] if skip_retry else [0]
+
+    for offset in retry_offsets:
+        adjusted_timestamp = timestamp + offset
+
+        if offset > 0:
+            print(f"\n      ↻ Skip-and-Retry: +{offset}초로 재시도 ({adjusted_timestamp:.1f}초)...", end=" ")
+
         try:
             # ffmpeg 명령어 구성 (YouTube 최적화)
             cmd = [
                 'ffmpeg',
-                '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',  # User-Agent 추가
-                '-headers', 'Accept-Language: en-US,en;q=0.9',  # 헤더 추가
-                '-reconnect', '1',              # 재연결 시도
-                '-reconnect_streamed', '1',     # 스트림 재연결
-                '-reconnect_delay_max', '5',    # 최대 5초 대기
-                '-ss', str(timestamp),          # 시작 시간
-                '-i', video_url,                # 입력 URL
-                '-frames:v', '1',               # 1개 프레임만
-                '-q:v', '2',                    # 높은 품질
-                '-vsync', '0',                  # 프레임 동기화 비활성화
-                '-y',                           # 덮어쓰기
+                '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                '-headers', 'Accept-Language: en-US,en;q=0.9',
+                '-reconnect', '1',
+                '-reconnect_streamed', '1',
+                '-reconnect_delay_max', '5',
+                '-ss', str(adjusted_timestamp),
+                '-i', video_url,
+                '-frames:v', '1',
+                '-q:v', '2',
+                '-vsync', '0',
+                '-y',
                 output_path
             ]
 
@@ -150,7 +159,7 @@ def extract_frame_at_time(video_url: str, timestamp: float, output_path: str, re
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=60,  # 타임아웃 30초 → 60초
+                timeout=60,
                 check=False
             )
 
@@ -158,26 +167,14 @@ def extract_frame_at_time(video_url: str, timestamp: float, output_path: str, re
             if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 return True
 
-            # 실패 시 stderr 출력 (첫 시도와 마지막 시도만)
-            if attempt == 0 or attempt == retry - 1:
-                stderr_text = result.stderr.decode('utf-8', errors='ignore')
-                if stderr_text:
-                    print(f"   ffmpeg stderr (attempt {attempt+1}):")
-                    # 중요한 에러만 출력
-                    for line in stderr_text.split('\n'):
-                        if 'error' in line.lower() or 'invalid' in line.lower():
-                            print(f"     {line.strip()}")
-
         except subprocess.TimeoutExpired:
-            print(f"⚠️  타임아웃 (시도 {attempt+1}/{retry})")
-            if attempt < retry - 1:
-                continue
-            return False
+            if offset == retry_offsets[-1]:
+                print(f"⚠️  타임아웃")
+            continue
         except Exception as e:
-            print(f"⚠️  에러 (시도 {attempt+1}/{retry}): {str(e)}")
-            if attempt < retry - 1:
-                continue
-            return False
+            if offset == retry_offsets[-1]:
+                print(f"⚠️  에러: {str(e)}")
+            continue
 
     return False
 
@@ -239,7 +236,7 @@ def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> Lis
     frames = []
 
     try:
-        # 4. 각 타임스탬프마다 프레임 추출
+        # 4. 각 타임스탬프마다 프레임 추출 (Skip-and-Retry)
         success_count = 0
         fail_count = 0
 
@@ -249,16 +246,12 @@ def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> Lis
             # 임시 파일 경로
             temp_file = os.path.join(temp_dir, f"frame_{i:03d}.jpg")
 
-            # ffmpeg로 프레임 추출 (재시도 3회)
-            success = extract_frame_at_time(stream_url, timestamp, temp_file, retry=3)
+            # ffmpeg로 프레임 추출 (Skip-and-Retry 활성화)
+            success = extract_frame_at_time(stream_url, timestamp, temp_file, skip_retry=True)
 
             if not success:
-                print(f"❌ 실패")
+                print(f"❌ 모든 재시도 실패")
                 fail_count += 1
-                # 너무 많이 실패하면 중단
-                if fail_count >= 5 and success_count == 0:
-                    print(f"\n⚠️  연속 {fail_count}회 실패 - 추출 중단")
-                    break
                 continue
 
             # PIL로 이미지 로드
@@ -275,22 +268,28 @@ def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> Lis
                 fail_count += 1
                 continue
 
-        # 5. 최소 프레임 수 체크
-        if len(frames) < 5:
-            error_details = f"\n프레임 추출 실패: {len(frames)}개만 추출됨 (최소 5개 필요)\n"
-            error_details += f"성공: {success_count}개, 실패: {fail_count}개\n\n"
+        # 5. 프레임 추출 결과 확인 (1개 이상이면 진행)
+        print(f"\n{'='*60}")
+        print(f"📊 프레임 추출 결과: 성공 {success_count}개 / 실패 {fail_count}개")
+        print(f"{'='*60}")
+
+        if len(frames) == 0:
+            error_details = "\n❌ 프레임 추출 완전 실패: 0개 추출됨\n\n"
             error_details += "가능한 원인:\n"
             error_details += "1. YouTube가 해당 영상의 다운로드를 제한함\n"
             error_details += "2. 네트워크 연결 불안정\n"
             error_details += "3. ffmpeg가 영상 포맷을 지원하지 않음\n"
-            error_details += "4. Shorts 영상은 제한이 더 많을 수 있음\n\n"
+            error_details += "4. Shorts/멤버십 영상은 제한이 많음\n\n"
             error_details += "해결 방법:\n"
-            error_details += "- 일반 YouTube 영상 (Shorts 아님) 시도\n"
-            error_details += "- 공개 영상 (비공개/멤버십 아님) 사용\n"
+            error_details += "- 일반 YouTube 공개 영상 시도\n"
             error_details += "- 방법 3: 직접 입력 사용"
             raise Exception(error_details)
 
-        print(f"\n✅ 총 {len(frames)}개 프레임 추출 완료! (성공: {success_count}, 실패: {fail_count})")
+        if len(frames) < num_frames:
+            print(f"⚠️  경고: {len(frames)}개만 추출됨 (목표: {num_frames}개)")
+            print(f"   → 추출된 프레임으로 분석을 진행합니다\n")
+
+        print(f"✅ 총 {len(frames)}개 프레임 추출 완료!")
         return frames
 
     except Exception as e:

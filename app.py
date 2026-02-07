@@ -333,8 +333,25 @@ if extract_youtube_button:
             with col1:
                 st.success(f"✅ {len(frames)}개 프레임 추출 완료!")
 
-            # TODO: 프레임을 engine.py로 전달하여 멀티모달 분석
-            # 현재는 텍스트 기반만 지원하므로, 임시로 메타데이터를 텍스트로 변환
+                # 추출된 프레임 미리보기
+                st.markdown("---")
+                st.markdown("### 📸 추출된 프레임 미리보기")
+                st.caption("AI 분석에 사용될 프레임들입니다")
+
+                # 프레임을 그리드로 표시 (3개씩)
+                if len(frames) > 0:
+                    # 3개씩 끊어서 표시
+                    for row_start in range(0, len(frames), 3):
+                        cols = st.columns(3)
+                        for col_idx, frame_idx in enumerate(range(row_start, min(row_start + 3, len(frames)))):
+                            with cols[col_idx]:
+                                st.image(
+                                    frames[frame_idx],
+                                    caption=f"프레임 {frame_idx + 1}/{len(frames)}",
+                                    use_container_width=True
+                                )
+
+            # 프레임을 engine.py로 전달하여 멀티모달 분석
             youtube_content = f"""
 제목: {metadata['title']}
 
