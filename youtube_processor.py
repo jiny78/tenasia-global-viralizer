@@ -30,28 +30,49 @@ def get_youtube_info(youtube_url: str) -> Dict[str, any]:
     """
     ydl_opts = {
         'format': 'best[ext=mp4]/best',
-        'quiet': True,
-        'no_warnings': True,
+        'quiet': False,  # 디버깅을 위해 False로 변경
+        'no_warnings': False,  # 경고 메시지 출력
         'extract_flat': False,
         'socket_timeout': 30,
+        'ignoreerrors': False,  # 에러를 명확히 표시
+        # 추가 옵션: 더 많은 포맷 시도
+        'format_sort': ['res:480', 'ext:mp4:m4a'],  # 낮은 해상도 우선
     }
 
     try:
         print(f"🔍 YouTube 비디오 정보 추출 중...")
+        print(f"   URL: {youtube_url}")
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=False)
 
+            # 디버깅: 사용 가능한 포맷 출력
+            if 'formats' in info:
+                print(f"   사용 가능한 포맷 수: {len(info['formats'])}")
+                # 처음 3개 포맷만 출력
+                for i, fmt in enumerate(info['formats'][:3]):
+                    print(f"   포맷 {i+1}: {fmt.get('format_id')} - {fmt.get('ext')} ({fmt.get('resolution', 'N/A')})")
+
             # 비디오 URL 찾기
             video_url = info.get('url')
             if not video_url:
-                raise Exception("비디오 URL을 찾을 수 없습니다")
+                # 대체 URL 찾기
+                if 'formats' in info and len(info['formats']) > 0:
+                    for fmt in info['formats']:
+                        if fmt.get('url'):
+                            video_url = fmt['url']
+                            print(f"   대체 URL 사용: {fmt.get('format_id')}")
+                            break
+
+                if not video_url:
+                    raise Exception("비디오 URL을 찾을 수 없습니다")
 
             duration = info.get('duration', 0)
 
             print(f"✅ 비디오 정보 추출 완료")
             print(f"   제목: {info.get('title', 'Unknown')}")
             print(f"   길이: {duration}초")
+            print(f"   업로더: {info.get('uploader', 'Unknown')}")
 
             return {
                 'url': video_url,
@@ -64,13 +85,19 @@ def get_youtube_info(youtube_url: str) -> Dict[str, any]:
     except Exception as e:
         error_msg = str(e)
 
+        print(f"\n❌ 에러 발생: {error_msg}\n")
+
         # 더 자세한 에러 메시지
         if "Video unavailable" in error_msg:
             raise Exception("영상을 사용할 수 없습니다. 영상이 삭제되었거나 비공개일 수 있습니다.")
-        elif "Sign in to confirm your age" in error_msg:
+        elif "Sign in to confirm your age" in error_msg or "age" in error_msg.lower():
             raise Exception("연령 제한이 있는 영상입니다. 다른 영상을 시도해주세요.")
-        elif "This video is not available" in error_msg:
+        elif "This video is not available" in error_msg or "not available" in error_msg.lower():
             raise Exception("이 영상은 사용할 수 없습니다. 지역 제한이나 저작권 문제일 수 있습니다.")
+        elif "Private video" in error_msg:
+            raise Exception("비공개 영상입니다. 공개 영상을 시도해주세요.")
+        elif "members-only" in error_msg.lower():
+            raise Exception("멤버십 전용 영상입니다. 일반 공개 영상을 시도해주세요.")
         else:
             raise Exception(f"YouTube 정보 추출 실패: {error_msg}")
 
