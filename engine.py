@@ -253,14 +253,16 @@ class PromptBuilder:
     를 독립적으로 조립합니다.
     """
 
-    def __init__(self, site_name: str, tone_mode: str = "rich"):
+    def __init__(self, site_name: str, tone_mode: str = "rich", content_style: str = "심층/분석"):
         """
         Args:
             site_name: 출처 사이트 이름 (예: "텐아시아")
             tone_mode: 분량 모드 ("compact" 또는 "rich")
+            content_style: 콘텐츠 스타일 ("심층/분석", "감성/팬덤", "위트/밈", "심플/속보")
         """
         self.site_name = site_name
         self.tone_mode = tone_mode.lower()
+        self.content_style = content_style
         self.site_name_en = self._get_site_name_en()
 
     def _get_site_name_en(self) -> str:
@@ -291,10 +293,20 @@ class PromptBuilder:
             instagram_min_paragraphs = 3
             threads_target = "300자 내외"
 
+        # 콘텐츠 스타일에 따른 가이드라인
+        style_guidelines = {
+            "심층/분석": "전문적이고 분석적인 톤으로 작성하세요. 데이터, 맥락, 의미를 강조하고 심도있는 인사이트를 제공하세요.",
+            "감성/팬덤": "따뜻하고 공감하는 톤으로 작성하세요. 감정적 연결, 팬심, 공감대 형성에 집중하고 애정 어린 표현을 사용하세요.",
+            "위트/밈": "재치있고 유머러스한 톤으로 작성하세요. 밈 문화, 트렌드, 위트있는 표현을 활용하고 재미있고 기억에 남는 메시지를 만드세요.",
+            "심플/속보": "간결하고 임팩트있는 톤으로 작성하세요. 핵심만 빠르게 전달하고 불필요한 수식어를 배제하며 속보성을 강조하세요."
+        }
+        style_guide = style_guidelines.get(self.content_style, style_guidelines["심층/분석"])
+
         return f"""당신은 {self.site_name}의 수석 글로벌 SNS 에디터입니다.
 아래 {content_type}를 바탕으로 3개 플랫폼(X, Instagram, Threads) x 2개 언어(English, Korean) = 총 6개의 SNS 게시물을 생성하세요.
 
 **분량 모드: {self.tone_mode.upper()}** - {detail_level} 작성
+**콘텐츠 스타일: {self.content_style}** - {style_guide}
 
 ## ✅ Self-Correction Checkpoints (AI 자체 검수)
 
@@ -1123,7 +1135,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 # 독립된 생성 함수 (관심사 분리)
 # ========================================
 
-def generate_article_posts(article_text: str, article_title: str = "", site_name: str = "텐아시아", tone_mode: str = "rich"):
+def generate_article_posts(article_text: str, article_title: str = "", site_name: str = "텐아시아", tone_mode: str = "rich", content_style: str = "심층/분석"):
     """
     기사 텍스트에 최적화된 SNS 게시물 생성
 
@@ -1134,6 +1146,7 @@ def generate_article_posts(article_text: str, article_title: str = "", site_name
         article_title: 기사 제목
         site_name: 출처 사이트 이름 (기본값: "텐아시아")
         tone_mode: 분량 모드 ("compact" 또는 "rich", 기본값: "rich")
+        content_style: 콘텐츠 스타일 (기본값: "심층/분석")
 
     Returns:
         JSON 형식의 SNS 게시물 딕셔너리 (RESPONSE_SCHEMA 준수)
@@ -1146,10 +1159,11 @@ def generate_article_posts(article_text: str, article_title: str = "", site_name
         print(f"📝 기사 분석 모드 시작")
         print(f"   사이트: {site_name}")
         print(f"   분량 모드: {tone_mode.upper()}")
+        print(f"   콘텐츠 스타일: {content_style}")
         print(f"{'='*70}\n")
 
         # PromptBuilder로 프롬프트 조립
-        builder = PromptBuilder(site_name, tone_mode)
+        builder = PromptBuilder(site_name, tone_mode, content_style)
         prompt = builder.build_article_prompt(article_text, article_title)
 
         # 모델 선택: gemini-2.0-flash (텍스트 분석 최적화)
@@ -1223,7 +1237,7 @@ def generate_article_posts(article_text: str, article_title: str = "", site_name
         raise Exception(error_msg)
 
 
-def generate_video_posts(video_path: str, video_metadata: str, video_title: str = "", site_name: str = "텐아시아", tone_mode: str = "rich"):
+def generate_video_posts(video_path: str, video_metadata: str, video_title: str = "", site_name: str = "텐아시아", tone_mode: str = "rich", content_style: str = "심층/분석"):
     """
     YouTube 영상에 최적화된 SNS 게시물 생성
 
@@ -1235,6 +1249,7 @@ def generate_video_posts(video_path: str, video_metadata: str, video_title: str 
         video_title: 영상 제목
         site_name: 출처 사이트 이름 (기본값: "텐아시아")
         tone_mode: 분량 모드 ("compact" 또는 "rich", 기본값: "rich")
+        content_style: 콘텐츠 스타일 (기본값: "심층/분석")
 
     Returns:
         JSON 형식의 SNS 게시물 딕셔너리 (RESPONSE_SCHEMA 준수)
@@ -1251,6 +1266,7 @@ def generate_video_posts(video_path: str, video_metadata: str, video_title: str 
         print(f"🎬 영상 분석 모드 시작")
         print(f"   사이트: {site_name}")
         print(f"   분량 모드: {tone_mode.upper()}")
+        print(f"   콘텐츠 스타일: {content_style}")
         print(f"{'='*70}\n")
 
         # 파일 존재 확인
@@ -1280,7 +1296,7 @@ def generate_video_posts(video_path: str, video_metadata: str, video_title: str 
         print(f"✅ 영상 처리 완료! 상태: {uploaded_video_file.state.name}\n")
 
         # PromptBuilder로 프롬프트 조립 (비디오 전용)
-        builder = PromptBuilder(site_name, tone_mode)
+        builder = PromptBuilder(site_name, tone_mode, content_style)
         prompt = builder.build_video_prompt(video_metadata, video_title)
 
         # 모델 선택: gemini-1.5-flash (멀티모달 최적화)

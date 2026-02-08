@@ -215,6 +215,36 @@ st.markdown("""
 </script>
 """, unsafe_allow_html=True)
 
+# ========================================
+# 상단: 스타일 선택 & 리셋 버튼
+# ========================================
+st.markdown("---")
+style_col, reset_col = st.columns([3, 1])
+
+with style_col:
+    content_style = st.selectbox(
+        "🎨 콘텐츠 스타일 선택",
+        options=["심층/분석", "감성/팬덤", "위트/밈", "심플/속보"],
+        format_func=lambda x: {
+            "심층/분석": "🖋️ 심층/분석 - 전문적이고 분석적인 톤",
+            "감성/팬덤": "💖 감성/팬덤 - 따뜻하고 공감하는 톤",
+            "위트/밈": "🤣 위트/밈 - 재치있고 유머러스한 톤",
+            "심플/속보": "⚡ 심플/속보 - 간결하고 임팩트있는 톤"
+        }[x],
+        help="생성될 SNS 게시물의 전반적인 스타일과 톤을 결정합니다"
+    )
+
+with reset_col:
+    st.write("")  # 버튼 위치 조정
+    st.write("")  # 버튼 위치 조정
+    if st.button("🔄 새로 시작", use_container_width=True, help="모든 입력과 결과를 초기화합니다"):
+        # 세션 상태 초기화
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
+st.markdown("---")
+
 # 메인 컨텐츠 - 반응형 레이아웃
 # 모바일: 세로 배치, 데스크톱: 가로 배치
 col1, col2 = st.columns([1, 1])
@@ -371,8 +401,17 @@ if should_generate and content_to_use.strip():
     with col2:
         gen_id = st.session_state.generation_count
 
+        # 영상 모드인지 기사 모드인지 판별
+        video_path = st.session_state.get('youtube_video_path', None)
+        is_video_mode = video_path is not None
+
         # 진행 상태 표시
-        status_container = st.status("🤖 AI 기사 분석 및 SNS 게시물 생성 중...", expanded=True)
+        if is_video_mode:
+            status_label = "🎬 영상 분석 및 SNS 게시물 생성 중..."
+        else:
+            status_label = "📝 기사 분석 및 SNS 게시물 생성 중..."
+
+        status_container = st.status(status_label, expanded=True)
 
         with status_container:
             # 진행 바 및 상태 표시
@@ -394,10 +433,6 @@ if should_generate and content_to_use.strip():
         model_info = st.empty()
 
         try:
-            # 영상 모드인지 기사 모드인지 판별
-            video_path = st.session_state.get('youtube_video_path', None)
-            is_video_mode = video_path is not None
-
             with status_container:
                 progress_bar.progress(10)
                 progress_text.text("🤖 AI 모델 초기화 중...")
@@ -410,7 +445,8 @@ if should_generate and content_to_use.strip():
                         video_metadata=content_to_use,
                         video_title=title_to_use,
                         site_name=site_name_to_use,
-                        tone_mode=tone_mode
+                        tone_mode=tone_mode,
+                        content_style=content_style
                     )
                 else:
                     progress_text.text("📝 기사 분석 및 SNS 게시물 생성 중...")
@@ -418,7 +454,8 @@ if should_generate and content_to_use.strip():
                         article_text=content_to_use,
                         article_title=title_to_use,
                         site_name=site_name_to_use,
-                        tone_mode=tone_mode
+                        tone_mode=tone_mode,
+                        content_style=content_style
                     )
 
                 progress_bar.progress(100)
