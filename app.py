@@ -2,7 +2,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 from engine import generate_article_posts, generate_video_posts
 from extractor import extract_article
-from youtube_processor import extract_frames_from_youtube, get_youtube_metadata
 
 # 페이지 설정
 st.set_page_config(
@@ -183,10 +182,10 @@ with st.sidebar:
     2. 'Extract Article' 버튼 클릭
     3. 자동으로 출처 인식 및 게시물 생성
 
-    **방법 2: 유튜브 쇼츠 URL** 🎬
-    1. 유튜브 쇼츠 URL 입력
-    2. 'Extract Frames' 버튼 클릭
-    3. 영상 프레임 분석하여 게시물 생성
+    **방법 2: 영상 파일 업로드** 🎥
+    1. MP4/MOV/AVI/MKV 파일 선택
+    2. 업로드 완료 후 'Generate' 버튼 클릭
+    3. AI가 전체 영상을 분석하여 게시물 생성
 
     **방법 3: 직접 입력** ✍️
     1. 기사 내용 직접 붙여넣기
@@ -235,23 +234,14 @@ with col1:
 
     st.divider()
 
-    # 방법 2: 유튜브 쇼츠 URL 입력
-    st.markdown("##### 방법 2: 유튜브 쇼츠 프레임 분석")
-    youtube_url = st.text_input(
-        "유튜브 쇼츠 URL",
-        placeholder="https://www.youtube.com/watch?v=... (일반 영상 추천)",
-        help="유튜브 URL을 입력하면 영상 프레임을 분석하여 게시물을 생성합니다. 일반 영상이 더 안정적입니다."
-    )
-    st.caption("💡 테스트용 샘플: `https://www.youtube.com/watch?v=dQw4w9WgXcQ`")
+    # 방법 2: 영상 파일 업로드
+    st.markdown("##### 방법 2: 영상 파일 업로드 🎥")
+    st.caption("영상을 직접 업로드하여 AI가 영상 내용을 분석하고 SNS 게시물을 생성합니다")
 
-    extract_youtube_button = st.button("🎬 Extract Frames", type="secondary", use_container_width=True, key="extract_youtube_btn")
-
-    # 플랜 B: 파일 직접 업로드
-    st.markdown("**또는 영상 파일 직접 업로드:**")
     uploaded_video_file = st.file_uploader(
-        "MP4 영상 파일 업로드",
+        "영상 파일 선택",
         type=["mp4", "mov", "avi", "mkv"],
-        help="YouTube URL이 작동하지 않을 경우, 영상 파일을 직접 업로드하세요 (최대 200MB 권장)"
+        help="영상 파일을 업로드하면 AI가 전체 영상을 분석하여 게시물을 생성합니다 (최대 200MB 권장)"
     )
 
     if uploaded_video_file:
@@ -267,7 +257,7 @@ with col1:
         st.session_state.youtube_video_path = temp_video_path
         st.session_state.article_title = uploaded_video_file.name
         st.session_state.article_content = f"업로드된 영상: {uploaded_video_file.name}"
-        st.session_state.site_name = "업로드"
+        st.session_state.site_name = "영상 업로드"
         st.session_state.auto_generate = True
 
         st.info("💡 아래 Generate 버튼을 클릭하면 AI가 영상을 분석합니다")
@@ -342,162 +332,6 @@ if extract_article_button:
                 st.error(f"❌ 추출 실패: {result['error']}")
             with col2:
                 st.error(f"❌ 추출 실패: {result['error']}")
-
-# 방법 2: Extract YouTube Frames 버튼 클릭 시
-if extract_youtube_button:
-    if not youtube_url.strip():
-        with col1:
-            st.error("유튜브 URL을 입력해주세요!")
-    else:
-        # 오른쪽 결과 영역에 진행 상황 표시
-        with col2:
-            status_container = st.container()
-            with status_container:
-                progress_info = st.info("🎬 유튜브 영상 분석 중...")
-                progress_details = st.empty()
-
-        try:
-            # 메타데이터 추출
-            progress_details.text("📊 영상 정보 가져오는 중...")
-            metadata = get_youtube_metadata(youtube_url)
-
-            with col1:
-                st.info(f"**제목:** {metadata['title'][:100]}...")
-                st.info(f"**길이:** {metadata['duration']}초")
-
-            # 프레임 추출 (미리보기용 + Gemini 분석용 비디오 파일)
-            progress_details.text("🎞️ 프레임 추출 및 영상 다운로드 중...")
-            frames, video_path = extract_frames_from_youtube(youtube_url, num_frames=10)
-
-            with col1:
-                st.success(f"✅ {len(frames)}개 프레임 추출 완료!")
-
-                # 추출된 프레임 미리보기
-                st.markdown("---")
-                st.markdown("### 📸 추출된 프레임 미리보기")
-                st.caption("AI 분석에 사용될 프레임들입니다")
-
-                # 프레임을 그리드로 표시 (3개씩)
-                if len(frames) > 0:
-                    # 3개씩 끊어서 표시
-                    for row_start in range(0, len(frames), 3):
-                        cols = st.columns(3)
-                        for col_idx, frame_idx in enumerate(range(row_start, min(row_start + 3, len(frames)))):
-                            with cols[col_idx]:
-                                st.image(
-                                    frames[frame_idx],
-                                    caption=f"프레임 {frame_idx + 1}/{len(frames)}",
-                                    use_container_width=True
-                                )
-
-            # 프레임을 engine.py로 전달하여 멀티모달 분석
-            youtube_content = f"""
-제목: {metadata['title']}
-
-설명:
-{metadata.get('description', '설명 없음')[:500]}
-
-영상 길이: {metadata['duration']}초
-조회수: {metadata.get('view_count', 0):,}회
-업로더: {metadata.get('uploader', '알 수 없음')}
-"""
-
-            # 세션 상태 업데이트
-            st.session_state.article_title = metadata['title']
-            st.session_state.article_content = youtube_content
-            st.session_state.site_name = "YouTube"
-            st.session_state.youtube_frames = frames  # 프레임 저장 (미리보기용)
-            st.session_state.youtube_video_path = video_path  # 비디오 파일 경로 (Gemini 분석용)
-            st.session_state.auto_generate = True  # 자동 생성 플래그 설정
-
-            with col2:
-                st.success("✅ 유튜브 영상 분석 완료! SNS 게시물 생성 중...")
-
-            # 페이지 새로고침
-            st.rerun()
-
-        except Exception as e:
-            import traceback
-            error_msg = str(e)
-            error_trace = traceback.format_exc()
-
-            with col1:
-                st.error(f"❌ 유튜브 처리 실패")
-
-                # 에러 메시지 표시
-                st.warning("**에러 상세:**")
-                st.code(error_msg)
-
-                # 구체적인 해결 방법
-                if "비디오 스트림을 열 수 없습니다" in error_msg:
-                    st.info("""
-                    **해결 방법:**
-                    1. 일반 YouTube 영상 URL 사용 (Shorts 대신)
-                    2. 영상이 공개 상태인지 확인
-                    3. 짧은 영상 시도 (30초~2분)
-                    4. 잠시 후 다시 시도
-                    """)
-                elif "영상을 사용할 수 없습니다" in error_msg or "Video unavailable" in error_msg:
-                    st.info("""
-                    **이 영상은 사용할 수 없습니다:**
-                    - 영상이 삭제되었거나 비공개일 수 있습니다
-                    - 다른 공개 영상을 시도해주세요
-                    """)
-                elif "연령 제한" in error_msg:
-                    st.info("""
-                    **연령 제한 영상:**
-                    - 연령 제한이 없는 영상을 사용해주세요
-                    """)
-                elif "지역 제한" in error_msg or "not available" in error_msg:
-                    st.info("""
-                    **지역 제한 또는 저작권 문제:**
-                    - 다른 영상을 시도해주세요
-                    """)
-                elif "403" in error_msg or "Forbidden" in error_msg or "유튜브의 일시적인 차단" in error_msg:
-                    st.info("""
-                    **💡 해결 방법: 위의 파일 업로드 기능을 이용하세요!**
-
-                    YouTube가 일시적으로 URL 다운로드를 차단했습니다.
-
-                    **권장 해결 방법:**
-                    1. ⬆️ 위로 스크롤하여 "MP4 영상 파일 업로드" 섹션 사용
-                    2. 영상을 다운로드한 후 직접 업로드
-                    3. 또는 잠시 후 다시 시도
-
-                    파일 업로드는 URL 제한 없이 항상 작동합니다!
-                    """)
-                else:
-                    st.info("""
-                    **일반적인 해결 방법:**
-                    1. 테스트용 샘플 URL 시도
-                    2. 방법 3: 직접 입력 사용
-                    3. yt-dlp 업데이트
-                    """)
-
-                # 디버그 정보
-                with st.expander("🔍 디버그 정보 (개발자용)"):
-                    st.code(error_trace)
-
-                # 추가 도움말
-                with st.expander("💡 추가 도움말"):
-                    st.markdown("""
-                    **yt-dlp 업데이트:**
-                    ```bash
-                    pip install --upgrade yt-dlp
-                    ```
-
-                    **OpenCV 재설치:**
-                    ```bash
-                    pip install --upgrade opencv-python-headless
-                    ```
-
-                    **또는 방법 3 사용:**
-                    영상 내용을 직접 입력하여 SNS 게시물 생성
-                    """)
-
-            with col2:
-                st.error(f"❌ 유튜브 처리 실패")
-                st.info("왼쪽 패널에서 에러 상세와 해결 방법을 확인하세요")
 
 # Generate 버튼 클릭 시 또는 자동 생성 플래그가 설정된 경우
 should_generate = generate_button or st.session_state.auto_generate
