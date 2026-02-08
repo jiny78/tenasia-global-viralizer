@@ -1,18 +1,96 @@
 """
 YouTube 비디오 처리 모듈
 
-YouTube URL에서 ffmpeg를 사용하여 안정적으로 프레임을 추출합니다.
-OpenCV 스트리밍 대신 yt-dlp + ffmpeg 조합 사용.
+YouTube URL에서 yt-dlp로 가장 낮은 화질의 영상을 다운로드하고
+OpenCV로 로컬 파일에서 프레임을 추출합니다.
 """
 
 import yt_dlp
-import subprocess
+import cv2
 import tempfile
 import os
 from PIL import Image
-from typing import List, Dict
+from typing import List, Dict, Optional
 from pathlib import Path
 import config
+
+
+def download_video_for_ai(youtube_url: str) -> str:
+    """
+    yt-dlp를 사용하여 영상을 가장 낮은 화질로 다운로드합니다.
+    AI 분석용이므로 파일 용량을 최소화하여 속도를 극대화합니다.
+
+    Args:
+        youtube_url: YouTube 비디오 URL
+
+    Returns:
+        다운로드된 mp4 파일의 경로
+
+    Raises:
+        Exception: 다운로드 실패 시
+    """
+    # 임시 파일 경로 생성
+    temp_dir = tempfile.gettempdir()
+    temp_video_path = os.path.join(temp_dir, f"youtube_ai_{os.getpid()}.mp4")
+
+    ydl_opts = {
+        # 가장 낮은 화질 선택 (용량 최소화)
+        'format': 'worst[ext=mp4]/worst/bestvideo[height<=360][ext=mp4]/bestvideo[height<=360]',
+        'outtmpl': temp_video_path,
+        'quiet': False,
+        'no_warnings': False,
+        # 다운로드 속도 최적화
+        'concurrent_fragment_downloads': 4,
+        'http_chunk_size': 10485760,  # 10MB chunks
+        # 추가 옵션
+        'geo_bypass': True,
+        'nocheckcertificate': True,
+    }
+
+    try:
+        print(f"📥 YouTube 영상 다운로드 중 (가장 낮은 화질)...")
+        print(f"   URL: {youtube_url}")
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=True)
+
+            print(f"✅ 다운로드 완료!")
+            print(f"   제목: {info.get('title', 'Unknown')}")
+            print(f"   길이: {info.get('duration', 0)}초")
+
+            # 파일이 생성되었는지 확인
+            if os.path.exists(temp_video_path):
+                file_size_mb = os.path.getsize(temp_video_path) / (1024 * 1024)
+                print(f"   파일 크기: {file_size_mb:.2f} MB")
+                print(f"   저장 경로: {temp_video_path}")
+                return temp_video_path
+            else:
+                raise Exception("다운로드된 파일을 찾을 수 없습니다")
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"\n❌ 다운로드 실패: {error_msg}\n")
+
+        # 에러 파일이 있으면 삭제
+        if os.path.exists(temp_video_path):
+            try:
+                os.remove(temp_video_path)
+            except:
+                pass
+
+        # 더 자세한 에러 메시지
+        if "Video unavailable" in error_msg:
+            raise Exception("영상을 사용할 수 없습니다. 영상이 삭제되었거나 비공개일 수 있습니다.")
+        elif "Sign in to confirm your age" in error_msg or "age" in error_msg.lower():
+            raise Exception("연령 제한이 있는 영상입니다. 다른 영상을 시도해주세요.")
+        elif "This video is not available" in error_msg or "not available" in error_msg.lower():
+            raise Exception("이 영상은 사용할 수 없습니다. 지역 제한이나 저작권 문제일 수 있습니다.")
+        elif "Private video" in error_msg:
+            raise Exception("비공개 영상입니다. 공개 영상을 시도해주세요.")
+        elif "members-only" in error_msg.lower():
+            raise Exception("멤버십 전용 영상입니다. 일반 공개 영상을 시도해주세요.")
+        else:
+            raise Exception(f"YouTube 다운로드 실패: {error_msg}")
 
 
 def get_youtube_info(youtube_url: str) -> Dict[str, any]:
@@ -113,76 +191,55 @@ def get_youtube_info(youtube_url: str) -> Dict[str, any]:
             raise Exception(f"YouTube 정보 추출 실패: {error_msg}")
 
 
-def extract_frame_at_time(video_url: str, timestamp: float, output_path: str, skip_retry: bool = True) -> bool:
+def extract_frame_from_video(video_path: str, frame_position: int, skip_retry: bool = True) -> Optional[Image.Image]:
     """
-    ffmpeg를 사용하여 특정 시간의 프레임을 추출합니다.
-    Skip-and-Retry: 실패 시 1초씩 뒤로 이동하여 재시도
+    OpenCV를 사용하여 로컬 비디오 파일에서 특정 프레임을 추출합니다.
+    Skip-and-Retry: 비어있는 프레임을 만나면 앞으로 이동하여 재시도
 
     Args:
-        video_url: 비디오 스트림 URL
-        timestamp: 추출할 시간 (초)
-        output_path: 저장할 이미지 경로
+        video_path: 로컬 비디오 파일 경로
+        frame_position: 프레임 위치 (번호)
         skip_retry: Skip-and-Retry 활성화 여부 (기본값: True)
 
     Returns:
-        성공 여부 (True/False)
+        PIL.Image 객체 또는 None
     """
-    # Skip-and-Retry: 0초, +1초, +2초, +3초 시도
-    retry_offsets = [0, 1, 2, 3] if skip_retry else [0]
+    cap = cv2.VideoCapture(video_path)
 
-    for offset in retry_offsets:
-        adjusted_timestamp = timestamp + offset
+    if not cap.isOpened():
+        return None
 
-        if offset > 0:
-            print(f"\n      ↻ Skip-and-Retry: +{offset}초로 재시도 ({adjusted_timestamp:.1f}초)...", end=" ")
+    try:
+        # Skip-and-Retry: 0, +30, +60, +90 프레임씩 앞으로 이동
+        retry_offsets = [0, 30, 60, 90] if skip_retry else [0]
 
-        try:
-            # ffmpeg 명령어 구성 (YouTube 최적화)
-            cmd = [
-                'ffmpeg',
-                '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                '-headers', 'Accept-Language: en-US,en;q=0.9',
-                '-reconnect', '1',
-                '-reconnect_streamed', '1',
-                '-reconnect_delay_max', '5',
-                '-ss', str(adjusted_timestamp),
-                '-i', video_url,
-                '-frames:v', '1',
-                '-q:v', '2',
-                '-vsync', '0',
-                '-y',
-                output_path
-            ]
+        for offset in retry_offsets:
+            adjusted_position = frame_position + offset
 
-            # ffmpeg 실행
-            result = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=60,
-                check=False
-            )
+            if offset > 0:
+                print(f"\n      ↻ Skip-and-Retry: +{offset} 프레임 앞으로...", end=" ")
 
-            # 파일이 생성되었는지 확인
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                return True
+            # 프레임 위치 설정
+            cap.set(cv2.CAP_PROP_POS_FRAMES, adjusted_position)
+            ret, frame = cap.read()
 
-        except subprocess.TimeoutExpired:
-            if offset == retry_offsets[-1]:
-                print(f"⚠️  타임아웃")
-            continue
-        except Exception as e:
-            if offset == retry_offsets[-1]:
-                print(f"⚠️  에러: {str(e)}")
-            continue
+            if ret and frame is not None and frame.size > 0:
+                # BGR → RGB 변환
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                # PIL Image로 변환
+                pil_image = Image.fromarray(frame_rgb)
+                return pil_image
 
-    return False
+        return None
+
+    finally:
+        cap.release()
 
 
 def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> List[Image.Image]:
     """
     YouTube URL에서 프레임을 추출합니다.
-    ffmpeg를 사용하여 안정적으로 프레임을 추출합니다.
+    yt-dlp로 가장 낮은 화질의 영상을 다운로드하고 OpenCV로 프레임을 추출합니다.
 
     Args:
         youtube_url: YouTube 비디오 URL
@@ -211,62 +268,61 @@ def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> Lis
             num_frames = 5
             print(f"   Shorts 최적화: 프레임 수를 5개로 조정")
 
-    # 1. 비디오 정보 추출
-    video_info = get_youtube_info(youtube_url)
-    stream_url = video_info['url']
-    duration = video_info['duration']
-
-    # 비디오 길이 제한 체크
-    if duration > config.MAX_VIDEO_LENGTH:
-        print(f"⚠️  경고: 비디오가 {config.MAX_VIDEO_LENGTH}초를 초과합니다. 처음 {config.MAX_VIDEO_LENGTH}초만 처리합니다.")
-        duration = config.MAX_VIDEO_LENGTH
-
-    # 2. 타임스탬프 계산 (10등분)
-    timestamps = []
-    interval = duration / num_frames
-    for i in range(num_frames):
-        timestamp = i * interval
-        timestamps.append(timestamp)
-
-    print(f"\n🎬 {num_frames}개 프레임 추출 중 (ffmpeg 사용)...")
-    print(f"   추출 위치: {[f'{t:.1f}초' for t in timestamps]}")
-
-    # 3. 임시 디렉토리 생성
-    temp_dir = tempfile.mkdtemp(prefix="youtube_frames_")
-    frames = []
+    video_path = None
 
     try:
-        # 4. 각 타임스탬프마다 프레임 추출 (Skip-and-Retry)
+        # 1. 영상 다운로드 (가장 낮은 화질)
+        video_path = download_video_for_ai(youtube_url)
+
+        # 2. OpenCV로 비디오 열기
+        print(f"\n🎬 {num_frames}개 프레임 추출 중 (OpenCV 사용)...")
+        cap = cv2.VideoCapture(video_path)
+
+        if not cap.isOpened():
+            raise Exception("다운로드된 영상 파일을 열 수 없습니다")
+
+        # 총 프레임 수와 FPS 가져오기
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        duration = total_frames / fps if fps > 0 else 0
+
+        print(f"   총 프레임 수: {total_frames}")
+        print(f"   FPS: {fps:.2f}")
+        print(f"   길이: {duration:.1f}초")
+
+        cap.release()
+
+        # 비디오 길이 제한 체크
+        if duration > config.MAX_VIDEO_LENGTH:
+            print(f"⚠️  경고: 비디오가 {config.MAX_VIDEO_LENGTH}초를 초과합니다.")
+            print(f"   처음 {config.MAX_VIDEO_LENGTH}초만 처리합니다.")
+            total_frames = min(total_frames, int(fps * config.MAX_VIDEO_LENGTH))
+
+        # 3. 프레임 위치 계산 (균등 분포)
+        interval = total_frames // num_frames
+        frame_positions = [i * interval for i in range(num_frames)]
+
+        print(f"   추출 위치: {[f'{p}번째' for p in frame_positions]}\n")
+
+        # 4. 각 위치에서 프레임 추출 (Skip-and-Retry)
+        frames = []
         success_count = 0
         fail_count = 0
 
-        for i, timestamp in enumerate(timestamps):
-            print(f"   [{i+1}/{num_frames}] {timestamp:.1f}초 추출 중...", end=" ")
+        for i, frame_pos in enumerate(frame_positions):
+            print(f"   [{i+1}/{num_frames}] 프레임 {frame_pos} 추출 중...", end=" ")
 
-            # 임시 파일 경로
-            temp_file = os.path.join(temp_dir, f"frame_{i:03d}.jpg")
+            # OpenCV로 프레임 추출 (Skip-and-Retry 활성화)
+            pil_image = extract_frame_from_video(video_path, frame_pos, skip_retry=True)
 
-            # ffmpeg로 프레임 추출 (Skip-and-Retry 활성화)
-            success = extract_frame_at_time(stream_url, timestamp, temp_file, skip_retry=True)
-
-            if not success:
+            if pil_image is None:
                 print(f"❌ 모든 재시도 실패")
                 fail_count += 1
                 continue
 
-            # PIL로 이미지 로드
-            try:
-                pil_image = Image.open(temp_file)
-                # RGB로 변환 (필요시)
-                if pil_image.mode != 'RGB':
-                    pil_image = pil_image.convert('RGB')
-                frames.append(pil_image.copy())  # 복사본 저장
-                success_count += 1
-                print(f"✅")
-            except Exception as e:
-                print(f"❌ 로드 실패: {str(e)}")
-                fail_count += 1
-                continue
+            frames.append(pil_image)
+            success_count += 1
+            print(f"✅")
 
         # 5. 프레임 추출 결과 확인 (1개 이상이면 진행)
         print(f"\n{'='*60}")
@@ -276,12 +332,11 @@ def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> Lis
         if len(frames) == 0:
             error_details = "\n❌ 프레임 추출 완전 실패: 0개 추출됨\n\n"
             error_details += "가능한 원인:\n"
-            error_details += "1. YouTube가 해당 영상의 다운로드를 제한함\n"
-            error_details += "2. 네트워크 연결 불안정\n"
-            error_details += "3. ffmpeg가 영상 포맷을 지원하지 않음\n"
-            error_details += "4. Shorts/멤버십 영상은 제한이 많음\n\n"
+            error_details += "1. 다운로드된 영상 파일이 손상됨\n"
+            error_details += "2. 영상 포맷이 OpenCV와 호환되지 않음\n"
+            error_details += "3. 영상의 모든 프레임이 비어있음\n\n"
             error_details += "해결 방법:\n"
-            error_details += "- 일반 YouTube 공개 영상 시도\n"
+            error_details += "- 다른 YouTube 공개 영상 시도\n"
             error_details += "- 방법 3: 직접 입력 사용"
             raise Exception(error_details)
 
@@ -296,13 +351,13 @@ def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> Lis
         raise Exception(f"프레임 추출 중 오류 발생: {str(e)}")
 
     finally:
-        # 6. 임시 파일 정리
-        try:
-            import shutil
-            shutil.rmtree(temp_dir)
-            print(f"🔒 임시 파일 정리 완료")
-        except:
-            pass
+        # 6. 임시 비디오 파일 삭제
+        if video_path and os.path.exists(video_path):
+            try:
+                os.remove(video_path)
+                print(f"🔒 임시 비디오 파일 삭제 완료")
+            except Exception as e:
+                print(f"⚠️  임시 파일 삭제 실패: {str(e)}")
 
 
 def get_youtube_metadata(youtube_url: str) -> Dict[str, any]:
