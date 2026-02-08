@@ -238,6 +238,201 @@ RESPONSE_SCHEMA = {
 }
 
 
+# ========================================
+# PromptBuilder 클래스 (관심사 분리)
+# ========================================
+
+class PromptBuilder:
+    """
+    SNS 게시물 생성을 위한 프롬프트 빌더
+
+    관심사 분리 원칙에 따라:
+    - 공통 프롬프트 (JSON 규격, 바이럴 점수)
+    - 기사 전용 프롬프트
+    - 영상 전용 프롬프트
+    를 독립적으로 조립합니다.
+    """
+
+    def __init__(self, site_name: str, tone_mode: str = "rich"):
+        """
+        Args:
+            site_name: 출처 사이트 이름 (예: "텐아시아")
+            tone_mode: 분량 모드 ("compact" 또는 "rich")
+        """
+        self.site_name = site_name
+        self.tone_mode = tone_mode.lower()
+        self.site_name_en = self._get_site_name_en()
+
+    def _get_site_name_en(self) -> str:
+        """사이트명 영문 매핑"""
+        mapping = {
+            "텐아시아": "TenAsia",
+            "한국경제": "hankyung"
+        }
+        return mapping.get(self.site_name, self.site_name)
+
+    def build_common_guidelines(self, content_type: str) -> str:
+        """
+        공통 가이드라인 생성 (JSON 규격, 바이럴 점수, 플랫폼별 상세)
+
+        Args:
+            content_type: "기사" 또는 "영상"
+
+        Returns:
+            공통 가이드라인 문자열
+        """
+        # 분량 모드에 따른 가이드라인 조절
+        if self.tone_mode == "compact":
+            detail_level = "간결하고 임팩트 있게"
+            instagram_min_paragraphs = 2
+            threads_target = "200-250자"
+        else:  # rich
+            detail_level = "풍부하고 상세하게"
+            instagram_min_paragraphs = 3
+            threads_target = "300자 내외"
+
+        return f"""당신은 {self.site_name}의 수석 글로벌 SNS 에디터입니다.
+아래 {content_type}를 바탕으로 3개 플랫폼(X, Instagram, Threads) x 2개 언어(English, Korean) = 총 6개의 SNS 게시물을 생성하세요.
+
+**분량 모드: {self.tone_mode.upper()}** - {detail_level} 작성
+
+## ✅ Self-Correction Checkpoints (AI 자체 검수)
+
+✓ **팩트 체크**: {content_type} 내용의 정보와 100% 일치하는가? 숫자, 날짜, 인용문 등을 정확히 사용했는가?
+✓ **품격 유지**: {self.site_name}의 브랜드 이미지에 맞는 고급스럽고 전문적인 어휘를 사용했는가?
+✓ **자연스러운 현지화**: 번역투가 아닌, 해당 언어권의 인플루언서가 작성한 것 같은 자연스러운 표현인가?
+
+각 게시물마다 위 기준으로 1-10점의 review_score를 매기세요.
+
+## 🔥 Viral Analysis (바이럴 가능성 평가)
+
+각 플랫폼별 게시물에 대해 1-100점의 바이럴 점수를 매기세요:
+- **70-100점**: 확실한 바이럴 가능성 (트렌드, 충격, 감동 요소 강함)
+- **40-69점**: 중간 정도의 바이럴 가능성 (관심 유도 요소 있음)
+- **1-39점**: 낮은 바이럴 가능성 (정보 전달 위주)
+
+점수와 함께 한 문장으로 근거를 제시하세요.
+
+## 📱 플랫폼별 상세 가이드라인
+
+### 🐦 X (Twitter) - Punchy & Viral
+**목표**: 순간적 관심 포착, 빠른 확산
+
+**English (네이티브 Gen Z 스타일)**
+- **길이**: 140-200자 (짧고 강렬하게)
+- **구조**: 핵심 메시지 1-2문장 → 후킹 포인트
+- **어휘**: Gen Z slang 필수 사용 (slay, iconic, ate, serving, no cap, it's giving, the way..., bestie 등)
+- **톤**: Casual, energetic, playful
+- **번역체 금지**: "This is...", "It is said that..." 같은 표현 배제
+- **예시 스타일**:
+  - "STFU she ATE that performance 😭 the way she served vocals AND visuals?? ICONIC behavior bestie"
+  - "no cap this collab is giving MAIN CHARACTER ENERGY ✨ they really said 'let's break the internet' and DID"
+
+**Korean (MZ세대 말투)**
+- **길이**: 140-200자
+- **구조**: 강렬한 첫 문장 → 핵심 팩트
+- **어휘**: ㄹㅇ, ㅇㅈ, 실화냐, 미쳤다, 찢었다, 개쩐다, 레전드, 역대급
+- **톤**: 흥분, 놀람, 공감
+- **이모지**: 적절히 사용 (😭🔥✨💫🤯)
+
+### 📸 Instagram - Rich Storytelling
+**목표**: 감성적 몰입, 깊은 인게이지먼트
+
+**English (인플루언서 스타일)**
+- **길이**: 최소 {instagram_min_paragraphs}문단 (공백 포함)
+- **구조**:
+  1. 감성적 오프닝 (시적 표현, 질문, 또는 강렬한 선언)
+  2. 스토리 전개 (맥락, 배경, 디테일)
+  3. 감정적 마무리 (여운, 질문, 또는 call-to-action)
+- **어휘**: sophisticated + relatable (poetic하되 accessible)
+- **톤**: Warm, intimate, thoughtful
+- **번역체 금지**: 자연스러운 essay 스타일
+- **해시태그**: 10개 (관련도 높은 순)
+
+**Korean (감성 에세이 스타일)**
+- **길이**: 최소 {instagram_min_paragraphs}문단
+- **구조**: 오프닝 → 전개 → 마무리
+- **어휘**: 고급스럽고 감성적
+- **톤**: 따뜻하고 깊이 있는
+- **해시태그**: 10개
+
+### 🧵 Threads - Conversational & Engaging
+**목표**: 자연스러운 대화, 커뮤니티 참여 유도
+
+**English (친구 대화 스타일)**
+- **길이**: {threads_target}
+- **구조**: 자연스러운 대화 → 질문으로 마무리
+- **어휘**: Casual, conversational
+- **톤**: Like chatting with a friend
+- **필수**: 마지막에 질문 포함 (커뮤니티 참여 유도)
+
+**Korean (친근한 대화 스타일)**
+- **길이**: {threads_target}
+- **구조**: 자연스러운 이야기 → 질문
+- **어휘**: 구어체, 친근함
+- **톤**: 편안하고 공감 가는
+- **필수**: 마지막에 질문 포함
+
+## 📊 Key Takeaway
+각 언어별로 {content_type}의 핵심을 한 문장으로 요약하세요.
+"""
+
+    def build_article_prompt(self, article_text: str, article_title: str) -> str:
+        """
+        기사 분석 전용 프롬프트 생성
+
+        Args:
+            article_text: 기사 본문
+            article_title: 기사 제목
+
+        Returns:
+            기사 분석 프롬프트
+        """
+        common = self.build_common_guidelines("기사")
+
+        article_info = f"""
+기사 제목: {article_title}
+
+기사 내용:
+{article_text}
+"""
+
+        return common + "\n\n" + article_info
+
+    def build_video_prompt(self, video_metadata: str, video_title: str) -> str:
+        """
+        영상 분석 전용 프롬프트 생성
+
+        Args:
+            video_metadata: 영상 메타데이터 (길이, 조회수 등)
+            video_title: 영상 제목
+
+        Returns:
+            영상 분석 프롬프트
+        """
+        common = self.build_common_guidelines("영상")
+
+        video_info = f"""
+영상 제목: {video_title}
+
+영상 메타데이터:
+{video_metadata}
+
+🎬 **중요 지시사항:**
+이 영상을 처음부터 끝까지 전체적으로 감상하고 분석하세요.
+- 영상의 핵심 메시지와 스토리라인 파악
+- 비주얼 요소 (색감, 분위기, 영상미) 분석
+- 감정적 임팩트와 바이럴 포인트 식별
+- 텐아시아 독자들(K-POP, 엔터테인먼트 관심층)이 좋아할 만한 요소 강조
+
+영상을 충분히 감상한 후, 텐아시아 독자들의 관심을 끌 수 있는 매력적인 SNS 카피와 정확한 바이럴 점수를 생성하세요.
+
+✓ **비주얼 반영**: 영상의 비주얼 요소(색감, 분위기, 액션)를 게시물에 반영했는가?
+"""
+
+        return common + "\n\n" + video_info
+
+
 def safe_generate_content(model, prompt, max_retries=None, progress_callback=None):
     """
     안정적인 콘텐츠 생성 래퍼 함수
@@ -922,6 +1117,256 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 
             print(f"✅ 클린업 완료!")
             print(f"{'='*70}\n")
+
+
+# ========================================
+# 독립된 생성 함수 (관심사 분리)
+# ========================================
+
+def generate_article_posts(article_text: str, article_title: str = "", site_name: str = "텐아시아", tone_mode: str = "rich"):
+    """
+    기사 텍스트에 최적화된 SNS 게시물 생성
+
+    gemini-2.0-flash 모델을 사용하여 텍스트 분석에 특화된 처리를 수행합니다.
+
+    Args:
+        article_text: 기사 본문
+        article_title: 기사 제목
+        site_name: 출처 사이트 이름 (기본값: "텐아시아")
+        tone_mode: 분량 모드 ("compact" 또는 "rich", 기본값: "rich")
+
+    Returns:
+        JSON 형식의 SNS 게시물 딕셔너리 (RESPONSE_SCHEMA 준수)
+
+    Raises:
+        Exception: 생성 실패 시 명확한 에러 메시지와 함께 발생
+    """
+    try:
+        print(f"\n{'='*70}")
+        print(f"📝 기사 분석 모드 시작")
+        print(f"   사이트: {site_name}")
+        print(f"   분량 모드: {tone_mode.upper()}")
+        print(f"{'='*70}\n")
+
+        # PromptBuilder로 프롬프트 조립
+        builder = PromptBuilder(site_name, tone_mode)
+        prompt = builder.build_article_prompt(article_text, article_title)
+
+        # 모델 선택: gemini-2.0-flash (텍스트 분석 최적화)
+        print(f"🤖 모델 선택 중...")
+        model_name, selection_reason = get_best_available_model(config.ARTICLE_MODEL)
+
+        if not model_name:
+            raise Exception(
+                "❌ 사용 가능한 Gemini 모델을 찾을 수 없습니다.\n\n"
+                "💡 해결 방법:\n"
+                "1. API 키가 올바르게 설정되었는지 확인\n"
+                "2. API 키에 Gemini API 접근 권한이 있는지 확인\n"
+                "3. https://makersuite.google.com/app/apikey 에서 키 확인"
+            )
+
+        print(f"✅ 선택된 모델: {model_name} ({selection_reason})")
+
+        # 모델 초기화
+        safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ]
+
+        generation_config = {
+            "temperature": 0.9,
+            "top_p": 0.95,
+            "top_k": 40,
+            "max_output_tokens": 8192,
+            "response_mime_type": "application/json",
+            "response_schema": RESPONSE_SCHEMA,
+        }
+
+        model = genai.GenerativeModel(
+            model_name,
+            safety_settings=safety_settings,
+            generation_config=generation_config
+        )
+
+        # API 호출 (Exponential Backoff)
+        print(f"\n🎨 SNS 게시물 생성 중...")
+        response = safe_generate_content(model, prompt, max_retries=config.MAX_RETRIES)
+
+        # JSON 파싱
+        result = json.loads(response.text)
+
+        print(f"\n✅ 기사 분석 완료!")
+        print(f"   생성된 게시물: 6개 (X, Instagram, Threads x 2개 언어)")
+        print(f"{'='*70}\n")
+
+        return result
+
+    except json.JSONDecodeError as e:
+        error_msg = f"JSON 파싱 실패 (기사 분석 모드)\n\n"
+        error_msg += f"에러: {str(e)}\n"
+        error_msg += f"응답 길이: {len(response.text)} characters\n\n"
+        error_msg += "가능한 원인:\n"
+        error_msg += "1. 응답이 JSON 형식이 아님\n"
+        error_msg += "2. max_output_tokens 부족\n"
+        error_msg += "3. 모델이 스키마를 준수하지 않음"
+        raise Exception(error_msg)
+
+    except Exception as e:
+        error_msg = f"기사 분석 실패\n\n"
+        error_msg += f"에러: {str(e)}\n\n"
+        error_msg += "해결 방법:\n"
+        error_msg += "1. 기사 내용이 너무 길지 않은지 확인 (8000자 이하 권장)\n"
+        error_msg += "2. API 키가 유효한지 확인\n"
+        error_msg += "3. 네트워크 연결 확인"
+        raise Exception(error_msg)
+
+
+def generate_video_posts(video_path: str, video_metadata: str, video_title: str = "", site_name: str = "텐아시아", tone_mode: str = "rich"):
+    """
+    YouTube 영상에 최적화된 SNS 게시물 생성
+
+    gemini-1.5-flash 모델을 사용하여 멀티모달 분석에 특화된 처리를 수행합니다.
+
+    Args:
+        video_path: 다운로드된 영상 파일 경로
+        video_metadata: 영상 메타데이터 (길이, 조회수 등)
+        video_title: 영상 제목
+        site_name: 출처 사이트 이름 (기본값: "텐아시아")
+        tone_mode: 분량 모드 ("compact" 또는 "rich", 기본값: "rich")
+
+    Returns:
+        JSON 형식의 SNS 게시물 딕셔너리 (RESPONSE_SCHEMA 준수)
+
+    Raises:
+        Exception: 생성 실패 시 명확한 에러 메시지와 함께 발생
+    """
+    uploaded_video_file = None
+
+    try:
+        import time
+
+        print(f"\n{'='*70}")
+        print(f"🎬 영상 분석 모드 시작")
+        print(f"   사이트: {site_name}")
+        print(f"   분량 모드: {tone_mode.upper()}")
+        print(f"{'='*70}\n")
+
+        # 파일 존재 확인
+        if not os.path.exists(video_path):
+            raise Exception(f"영상 파일을 찾을 수 없습니다: {video_path}")
+
+        # Google AI에 영상 업로드
+        print(f"📤 Google AI 서버에 영상 업로드 중...")
+        print(f"   파일: {video_path}")
+        print(f"   크기: {os.path.getsize(video_path) / (1024*1024):.2f} MB")
+
+        uploaded_video_file = genai.upload_file(path=video_path)
+        print(f"✅ 업로드 완료!")
+        print(f"   파일 이름: {uploaded_video_file.name}")
+        print(f"   URI: {uploaded_video_file.uri}")
+
+        # 영상 처리 완료 대기 (ACTIVE 상태까지)
+        print(f"\n⏳ 영상 처리 중...")
+        while uploaded_video_file.state.name == "PROCESSING":
+            print(f"   상태: {uploaded_video_file.state.name} - 대기 중...", end="\r")
+            time.sleep(2)
+            uploaded_video_file = genai.get_file(uploaded_video_file.name)
+
+        if uploaded_video_file.state.name == "FAILED":
+            raise Exception(f"영상 처리 실패: {uploaded_video_file.state.name}")
+
+        print(f"✅ 영상 처리 완료! 상태: {uploaded_video_file.state.name}\n")
+
+        # PromptBuilder로 프롬프트 조립 (비디오 전용)
+        builder = PromptBuilder(site_name, tone_mode)
+        prompt = builder.build_video_prompt(video_metadata, video_title)
+
+        # 모델 선택: gemini-1.5-flash (멀티모달 최적화)
+        print(f"🤖 모델 선택 중...")
+        model_name, selection_reason = get_best_available_model(config.VIDEO_MODEL)
+
+        if not model_name:
+            raise Exception(
+                "❌ 사용 가능한 Gemini 모델을 찾을 수 없습니다.\n\n"
+                "💡 해결 방법:\n"
+                "1. API 키가 올바르게 설정되었는지 확인\n"
+                "2. API 키에 Gemini API 접근 권한이 있는지 확인\n"
+                "3. https://makersuite.google.com/app/apikey 에서 키 확인"
+            )
+
+        print(f"✅ 선택된 모델: {model_name} ({selection_reason})")
+
+        # 모델 초기화
+        safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ]
+
+        generation_config = {
+            "temperature": 0.9,
+            "top_p": 0.95,
+            "top_k": 40,
+            "max_output_tokens": 8192,
+            "response_mime_type": "application/json",
+            "response_schema": RESPONSE_SCHEMA,
+        }
+
+        model = genai.GenerativeModel(
+            model_name,
+            safety_settings=safety_settings,
+            generation_config=generation_config
+        )
+
+        # 멀티모달 콘텐츠 구성
+        content_parts = [prompt, uploaded_video_file]
+
+        # API 호출 (Exponential Backoff)
+        print(f"\n🎨 Gemini가 영상을 전체적으로 감상하는 중...")
+        print(f"   이 과정은 영상 길이에 따라 시간이 걸릴 수 있습니다.\n")
+
+        response = safe_generate_content(model, content_parts, max_retries=config.MAX_RETRIES)
+
+        # JSON 파싱
+        result = json.loads(response.text)
+
+        print(f"\n✅ 영상 분석 완료!")
+        print(f"   생성된 게시물: 6개 (X, Instagram, Threads x 2개 언어)")
+        print(f"{'='*70}\n")
+
+        return result
+
+    except json.JSONDecodeError as e:
+        error_msg = f"JSON 파싱 실패 (영상 분석 모드)\n\n"
+        error_msg += f"에러: {str(e)}\n"
+        error_msg += f"응답 길이: {len(response.text)} characters\n\n"
+        error_msg += "가능한 원인:\n"
+        error_msg += "1. 응답이 JSON 형식이 아님\n"
+        error_msg += "2. max_output_tokens 부족\n"
+        error_msg += "3. 모델이 스키마를 준수하지 않음"
+        raise Exception(error_msg)
+
+    except Exception as e:
+        error_msg = f"영상 분석 실패\n\n"
+        error_msg += f"에러: {str(e)}\n\n"
+        error_msg += "해결 방법:\n"
+        error_msg += "1. 영상 파일이 손상되지 않았는지 확인\n"
+        error_msg += "2. 영상 길이가 너무 길지 않은지 확인 (5분 이하 권장)\n"
+        error_msg += "3. API 키가 유효한지 확인\n"
+        error_msg += "4. 네트워크 연결 확인"
+        raise Exception(error_msg)
+
+    finally:
+        # 클린업: Google Cloud 파일 삭제
+        if uploaded_video_file:
+            try:
+                genai.delete_file(uploaded_video_file.name)
+                print(f"🧹 Google Cloud 파일 삭제 완료: {uploaded_video_file.name}")
+            except Exception as e:
+                print(f"⚠️  Google Cloud 파일 삭제 실패: {str(e)}")
 
 
 def generate_sns_posts(article_text: str, article_title: str = "") -> dict:
