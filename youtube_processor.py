@@ -37,14 +37,18 @@ def download_video_for_ai(youtube_url: str) -> str:
         # 가장 낮은 화질 선택 (용량 최소화)
         'format': 'worst[ext=mp4]/worst/bestvideo[height<=360][ext=mp4]/bestvideo[height<=360]',
         'outtmpl': temp_video_path,
-        'quiet': False,
-        'no_warnings': False,
+        'quiet': True,
+        'no_warnings': True,
         # 다운로드 속도 최적화
         'concurrent_fragment_downloads': 4,
         'http_chunk_size': 10485760,  # 10MB chunks
-        # 추가 옵션
-        'geo_bypass': True,
+        # 보안 우회 설정 (403 Forbidden 방지)
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'referer': 'https://www.google.com/',
         'nocheckcertificate': True,
+        'geo_bypass': True,
+        # 추가 우회 옵션
+        'extractor_args': {'youtube': {'skip': ['dash', 'hls']}},
     }
 
     try:
@@ -79,7 +83,15 @@ def download_video_for_ai(youtube_url: str) -> str:
                 pass
 
         # 더 자세한 에러 메시지
-        if "Video unavailable" in error_msg:
+        if "403" in error_msg or "Forbidden" in error_msg or "HTTP Error 403" in error_msg:
+            raise Exception(
+                "🚫 유튜브의 일시적인 차단으로 URL 분석이 불가능합니다.\n\n"
+                "💡 해결 방법:\n"
+                "1. 영상 파일을 직접 업로드해 주세요 (아래 파일 업로드 기능 이용)\n"
+                "2. 잠시 후 다시 시도해 주세요\n"
+                "3. 다른 YouTube 영상을 시도해 주세요"
+            )
+        elif "Video unavailable" in error_msg:
             raise Exception("영상을 사용할 수 없습니다. 영상이 삭제되었거나 비공개일 수 있습니다.")
         elif "Sign in to confirm your age" in error_msg or "age" in error_msg.lower():
             raise Exception("연령 제한이 있는 영상입니다. 다른 영상을 시도해주세요.")

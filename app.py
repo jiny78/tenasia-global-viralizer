@@ -246,6 +246,33 @@ with col1:
 
     extract_youtube_button = st.button("🎬 Extract Frames", type="secondary", use_container_width=True, key="extract_youtube_btn")
 
+    # 플랜 B: 파일 직접 업로드
+    st.markdown("**또는 영상 파일 직접 업로드:**")
+    uploaded_video_file = st.file_uploader(
+        "MP4 영상 파일 업로드",
+        type=["mp4", "mov", "avi", "mkv"],
+        help="YouTube URL이 작동하지 않을 경우, 영상 파일을 직접 업로드하세요 (최대 200MB 권장)"
+    )
+
+    if uploaded_video_file:
+        st.success(f"✅ 파일 업로드 완료: {uploaded_video_file.name} ({uploaded_video_file.size / (1024*1024):.2f} MB)")
+
+        # 업로드된 파일을 임시 파일로 저장
+        import tempfile
+        temp_video_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4").name
+        with open(temp_video_path, "wb") as f:
+            f.write(uploaded_video_file.read())
+
+        # 세션 상태에 저장
+        st.session_state.youtube_video_path = temp_video_path
+        st.session_state.article_title = uploaded_video_file.name
+        st.session_state.article_content = f"업로드된 영상: {uploaded_video_file.name}"
+        st.session_state.site_name = "업로드"
+        st.session_state.auto_generate = True
+
+        st.info("💡 아래 Generate 버튼을 클릭하면 AI가 영상을 분석합니다")
+        st.rerun()
+
     st.divider()
 
     # 방법 3: 직접 입력
@@ -425,6 +452,19 @@ if extract_youtube_button:
                     st.info("""
                     **지역 제한 또는 저작권 문제:**
                     - 다른 영상을 시도해주세요
+                    """)
+                elif "403" in error_msg or "Forbidden" in error_msg or "유튜브의 일시적인 차단" in error_msg:
+                    st.info("""
+                    **💡 해결 방법: 위의 파일 업로드 기능을 이용하세요!**
+
+                    YouTube가 일시적으로 URL 다운로드를 차단했습니다.
+
+                    **권장 해결 방법:**
+                    1. ⬆️ 위로 스크롤하여 "MP4 영상 파일 업로드" 섹션 사용
+                    2. 영상을 다운로드한 후 직접 업로드
+                    3. 또는 잠시 후 다시 시도
+
+                    파일 업로드는 URL 제한 없이 항상 작동합니다!
                     """)
                 else:
                     st.info("""
