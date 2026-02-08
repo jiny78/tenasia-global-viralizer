@@ -575,6 +575,30 @@ class PromptBuilder:
 
 점수와 함께 한 문장으로 근거를 제시하세요.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 🌍 영어 카피 생성 핵심 원칙 (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**🚫 Non-Translation Rule (절대 규칙)**:
+- 한국어 카피를 영어로 단순히 번역(Translation)하지 말 것!
+- 영어는 한국어와 **완전히 독립적으로** 영어권 네이티브가 작성한 것처럼 생성
+- 번역체 표현 (예: "This is...", "It is said that...", "According to...") 절대 금지
+
+**✅ Transcreation Rule (문화적 재창조)**:
+- 한국 특유의 표현 → 영어권 SNS에서 통용되는 유사한 문화적 맥락으로 재창조
+- 예시:
+  * "대박" → "no cap", "lowkey legendary", "hits different"
+  * "찢었다" → "ATE that", "served", "absolutely slayed"
+  * "눈물나는" → "got me emotional", "I'm not crying you're crying"
+  * "미쳤다" → "unhinged (in the best way)", "absolutely insane", "going OFF"
+
+**🎯 Platform-Specific Adaptation**:
+- X: 'Main Character Energy' 중심의 세련되고 임팩트있는 영어
+- Instagram: 글로벌 팬덤이 공유하는 감각적 Slang 적극 활용
+- Threads: 친구와 대화하는 자연스러운 영어
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ## 📱 플랫폼별 상세 가이드라인
 
 **🔔 리마인더**: 아래 플랫폼별 가이드라인을 따르되, **위에서 정의한 당신의 스타일({self.content_style})을 모든 플랫폼에 일관되게 적용**하세요!
@@ -583,15 +607,24 @@ class PromptBuilder:
 **목표**: 순간적 관심 포착, 빠른 확산
 **스타일 적용**: {self.content_style} 톤을 140-200자 안에 임팩트있게 압축
 
-**English (네이티브 Gen Z 스타일)**
+**English (Main Character Energy 중심)**
 - **길이**: 140-200자 (짧고 강렬하게)
-- **구조**: 핵심 메시지 1-2문장 → 후킹 포인트
-- **어휘**: Gen Z slang 필수 사용 (slay, iconic, ate, serving, no cap, it's giving, the way..., bestie 등)
-- **톤**: Casual, energetic, playful
-- **번역체 금지**: "This is...", "It is said that..." 같은 표현 배제
-- **예시 스타일**:
-  - "STFU she ATE that performance 😭 the way she served vocals AND visuals?? ICONIC behavior bestie"
-  - "no cap this collab is giving MAIN CHARACTER ENERGY ✨ they really said 'let's break the internet' and DID"
+- **핵심 전략**: 'Main Character Energy' 강조 - 주인공처럼 당당하고 세련된 영어
+- **구조**: 강렬한 Hook → 핵심 포인트 → 임팩트 마무리
+- **어휘**:
+  * Core: "main character energy", "iconic", "legendary", "the moment"
+  * Energy: "ate", "served", "slayed", "giving", "hits different"
+  * Emphasis: "no cap", "periodt", "the way...", "NOT the..."
+- **톤**: Confident, energetic, trend-setting
+- **🚫 절대 금지**: 번역체 ("This is...", "It is...", "They are...")
+- **✅ 네이티브 패턴**:
+  * "NOT [subject] doing [action]" → "NOT this collaboration breaking the internet"
+  * "the way [subject] [verb]..." → "the way they served vocals AND visuals"
+  * "[subject] is giving [quality]" → "this stage is giving MAIN CHARACTER ENERGY"
+
+- **예시 (Main Character Energy)**:
+  * "NOT this collab having MAIN CHARACTER ENERGY 😭 the way they're rewriting the rules?? absolutely ICONIC behavior"
+  * "the VOCALS. the VISUALS. the PRESENCE. this performance is giving everything we needed and MORE ✨"
 
 **Korean (MZ세대 말투)**
 - **길이**: 140-200자
@@ -604,16 +637,44 @@ class PromptBuilder:
 **목표**: 감성적 몰입, 깊은 인게이지먼트
 **스타일 적용**: {self.content_style} 톤으로 스토리텔링 전개
 
-**English (인플루언서 스타일)**
+**English (글로벌 팬덤 인플루언서 스타일)**
 - **길이**: 최소 {instagram_min_paragraphs}문단 (공백 포함)
+- **핵심 전략**: 글로벌 팬덤 공용어 + 감각적 Slang 자연스럽게 혼합
 - **구조**:
   1. 감성적 오프닝 (시적 표현, 질문, 또는 강렬한 선언)
-  2. 스토리 전개 (맥락, 배경, 디테일)
+  2. 스토리 전개 (맥락, 배경, 디테일 + Slang 포인트)
   3. 감정적 마무리 (여운, 질문, 또는 call-to-action)
-- **어휘**: sophisticated + relatable (poetic하되 accessible)
-- **톤**: Warm, intimate, thoughtful
-- **번역체 금지**: 자연스러운 essay 스타일
+
+- **어휘 조합**:
+  * Base: sophisticated + poetic (authentic, breathtaking, captivating)
+  * Slang injection: "slay", "ate", "visuals on point", "energy unmatched"
+  * Balance: 문단당 1-2개의 Slang을 자연스럽게 섞기
+
+- **톤**: Warm, intimate, 팬덤의 언어를 구사하는 현지 인플루언서
+
+- **🚫 번역체 금지**:
+  * "This performance is..." → "The performance absolutely SLAYED"
+  * "It was very beautiful" → "The visuals were on point, the energy unmatched"
+
+- **✅ 팬덤 Slang 활용 예시**:
+  * "visuals on point" (비주얼 완벽)
+  * "ate and left no crumbs" (완벽하게 해냄)
+  * "the talent is LOUD" (재능이 압도적)
+  * "rent-free in my head" (머릿속에서 떠나지 않음)
+  * "living for this" (이거 정말 좋아)
+
 - **해시태그**: 10개 (관련도 높은 순)
+
+- **예시 구조**:
+  ```
+  [감성 오프닝] The way this performance lives rent-free in my mind...
+
+  [스토리 + Slang] Every detail was on point—from the vocals that
+  absolutely slayed to the stage presence that ate and left NO crumbs.
+  The dedication shines through in every moment.
+
+  [감성 마무리] This is what artistry looks like. Living for this energy. ✨
+  ```
 
 **Korean (감성 에세이 스타일)**
 - **길이**: 최소 {instagram_min_paragraphs}문단
@@ -626,12 +687,38 @@ class PromptBuilder:
 **목표**: 자연스러운 대화, 커뮤니티 참여 유도
 **스타일 적용**: {self.content_style} 톤으로 대화하듯 작성
 
-**English (친구 대화 스타일)**
+**English (네이티브 친구 대화 스타일)**
 - **길이**: {threads_target}
-- **구조**: 자연스러운 대화 → 질문으로 마무리
-- **어휘**: Casual, conversational
-- **톤**: Like chatting with a friend
+- **핵심 전략**: 영어권 친구와 문자하듯 자연스럽게
+- **구조**: 자연스러운 대화 흐름 → 공감 유도 → 질문으로 마무리
+
+- **대화 패턴**:
+  * "okay but..." (동의하면서 추가)
+  * "can we talk about..." (화제 제시)
+  * "am I the only one who..." (공감 유도)
+  * "thoughts?" / "anyone else?" (참여 유도)
+
+- **어휘**: Casual, conversational, 친구에게 말하듯
+- **톤**: Like texting your bestie
+
+- **🚫 번역체 금지**:
+  * "I think this is..." → "okay but this is lowkey amazing"
+  * "What do you think about..." → "can we talk about how good this is??"
+
+- **✅ 자연스러운 패턴**:
+  * "okay but the way they..."
+  * "not me getting emotional over..."
+  * "tell me I'm not the only one who..."
+  * "this is living in my mind rent-free, anyone else?"
+
 - **필수**: 마지막에 질문 포함 (커뮤니티 참여 유도)
+
+- **예시**:
+  ```
+  okay but can we talk about this performance?? the energy was
+  UNMATCHED and I'm still not over it. living rent-free in my
+  mind honestly. anyone else or just me? 👀
+  ```
 
 **Korean (친근한 대화 스타일)**
 - **길이**: {threads_target}
