@@ -1,6 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from engine import generate_sns_posts_streaming
+from engine import generate_article_posts, generate_video_posts
 from extractor import extract_article
 from youtube_processor import extract_frames_from_youtube, get_youtube_metadata
 
@@ -267,6 +267,16 @@ with col1:
         key="content_input"
     )
 
+    # 분량 모드 선택
+    st.divider()
+    tone_mode = st.radio(
+        "📏 분량 모드",
+        options=["rich", "compact"],
+        format_func=lambda x: "📚 Rich (풍부하고 상세)" if x == "rich" else "⚡ Compact (간결하고 임팩트)",
+        horizontal=True,
+        help="Rich: Instagram 최소 3문단, Threads 300자 / Compact: Instagram 최소 2문단, Threads 200-250자"
+    )
+
     generate_button = st.button("🚀 Generate SNS Posts", type="primary", use_container_width=True)
 
 with col2:
@@ -510,128 +520,84 @@ if should_generate and content_to_use.strip():
         model_info = st.empty()
 
         try:
-            # 진행률 추적
-            total_steps = 6  # 3 platforms x 2 languages
-            completed_steps = 0
-            platform_status = {"x": 0, "instagram": 0, "threads": 0}  # 0: pending, 1: generating, 2: completed
-
-            # 유튜브 영상 파일 경로 가져오기
+            # 영상 모드인지 기사 모드인지 판별
             video_path = st.session_state.get('youtube_video_path', None)
+            is_video_mode = video_path is not None
 
-            # 스트리밍 방식으로 생성
-            for update in generate_sns_posts_streaming(content_to_use, title_to_use, site_name_to_use, video_path):
+            with status_container:
+                progress_bar.progress(10)
+                progress_text.text("🤖 AI 모델 초기화 중...")
+
+                # 모드별 함수 호출 (관심사 분리)
+                if is_video_mode:
+                    progress_text.text("🎬 영상 전체 분석 중... (시간이 걸릴 수 있습니다)")
+                    result = generate_video_posts(
+                        video_path=video_path,
+                        video_metadata=content_to_use,
+                        video_title=title_to_use,
+                        site_name=site_name_to_use,
+                        tone_mode=tone_mode
+                    )
+                else:
+                    progress_text.text("📝 기사 분석 및 SNS 게시물 생성 중...")
+                    result = generate_article_posts(
+                        article_text=content_to_use,
+                        article_title=title_to_use,
+                        site_name=site_name_to_use,
+                        tone_mode=tone_mode
+                    )
+
+                progress_bar.progress(100)
+                progress_text.text("✅ 생성 완료!")
+                status_x.text("🐦 X (Twitter): ✅ 완료")
+                status_instagram.text("📸 Instagram: ✅ 완료")
+                status_threads.text("🧵 Threads: ✅ 완료")
+
+            status_container.update(label="✅ 생성 완료!", state="complete", expanded=False)
+
+            # 결과 저장 (JSON 형식에서 session_state로)
+            st.session_state.generated_posts["x"]["english"] = result["en"]["x"]
+            st.session_state.generated_posts["x"]["korean"] = result["kr"]["x"]
+            st.session_state.generated_posts["instagram"]["english"] = result["en"]["insta"]
+            st.session_state.generated_posts["instagram"]["korean"] = result["kr"]["insta"]
+            st.session_state.generated_posts["threads"]["english"] = result["en"]["threads"]
+            st.session_state.generated_posts["threads"]["korean"] = result["kr"]["threads"]
+
+            # 바이럴 점수 저장
+            st.session_state.viral_scores["x"]["english"] = result["viral_analysis"]["en"]["x"]["score"]
+            st.session_state.viral_scores["x"]["korean"] = result["viral_analysis"]["kr"]["x"]["score"]
+            st.session_state.viral_scores["instagram"]["english"] = result["viral_analysis"]["en"]["insta"]["score"]
+            st.session_state.viral_scores["instagram"]["korean"] = result["viral_analysis"]["kr"]["insta"]["score"]
+            st.session_state.viral_scores["threads"]["english"] = result["viral_analysis"]["en"]["threads"]["score"]
+            st.session_state.viral_scores["threads"]["korean"] = result["viral_analysis"]["kr"]["threads"]["score"]
+
+            # 바이럴 이유 저장
+            st.session_state.viral_reasons["x"]["english"] = result["viral_analysis"]["en"]["x"]["reason"]
+            st.session_state.viral_reasons["x"]["korean"] = result["viral_analysis"]["kr"]["x"]["reason"]
+            st.session_state.viral_reasons["instagram"]["english"] = result["viral_analysis"]["en"]["insta"]["reason"]
+            st.session_state.viral_reasons["instagram"]["korean"] = result["viral_analysis"]["kr"]["insta"]["reason"]
+            st.session_state.viral_reasons["threads"]["english"] = result["viral_analysis"]["en"]["threads"]["reason"]
+            st.session_state.viral_reasons["threads"]["korean"] = result["viral_analysis"]["kr"]["threads"]["reason"]
+
+            # 모델 정보 표시
+            model_used = "gemini-1.5-flash" if is_video_mode else "gemini-2.0-flash"
+            model_info.caption(f"🤖 Generated by: {model_used} ({tone_mode.upper()} mode)")
+
+        except Exception as e:
+            status_container.update(label="❌ 생성 실패", state="error", expanded=True)
+            with status_container:
+                st.error(f"**오류 발생:**\n\n{str(e)}")
+
+            # 더미 에러 처리 블록 (기존 로직 호환)
+            for update in [{"platform": "error"}]:
                 platform = update.get("platform")
-                status = update.get("status")
-                language = update.get("language")
-
-                # 에러 처리
                 if platform == "error":
                     status_container.update(label="❌ 생성 실패", state="error", expanded=True)
                     with status_container:
                         st.error(f"**오류 발생:**\n\n{update.get('error', '알 수 없는 오류')}")
-                    break
 
-                # 재시도 처리
-                elif platform == "retry" and status == "retrying":
-                    attempt = update.get("attempt", 0)
-                    max_retries = update.get("max_retries", 3)
-                    wait_time = update.get("wait_time", 0)
-
-                    with status_container:
-                        retry_info.warning(
-                            f"⚠️ **구글 서버 응답 대기 중 ({attempt}/{max_retries})...**\n\n"
-                            f"💡 {wait_time}초 후 자동으로 다시 시도합니다."
-                        )
-                        progress_text.text(f"⏳ 구글 서버 응답 대기 중 ({attempt}/{max_retries})...")
-
-                # API 호출 시작
-                elif platform == "all" and status == "generating":
-                    with status_container:
-                        retry_info.empty()
-                        progress_bar.progress(10)
-                        # 동적 넛지 메시지
-                        nudge_messages = [
-                            "🔄 기사를 분석 중...",
-                            "✨ 텐아시아만의 감각적인 카피를 연마 중입니다...",
-                            "🎨 바이럴 콘텐츠를 디자인 중...",
-                            "💫 글로벌 팬들의 마음을 사로잡을 문구를 작성 중..."
-                        ]
-                        import random
-                        progress_text.text(random.choice(nudge_messages))
-
-                # 전체 완료
-                elif platform == "all" and status == "completed":
-                    completed_steps = total_steps
-                    status_container.update(label="✅ 생성 완료!", state="complete", expanded=False)
-                    with status_container:
-                        progress_bar.progress(100)
-                        progress_text.text("✅ 모든 SNS 게시물 생성 완료!")
-                        status_x.text("🐦 X (Twitter): ✅ 완료")
-                        status_instagram.text("📸 Instagram: ✅ 완료")
-                        status_threads.text("🧵 Threads: ✅ 완료")
-
-                    model_info.caption(f"🤖 Generated by: {update.get('model', 'gemini-2.5-flash')}")
-
-                # 각 플랫폼/언어별 처리
-                elif platform in ["x", "instagram", "threads"] and language:
-                    if status == "generating":
-                        platform_status[platform] = 1
-                        lang_emoji = "🇺🇸" if language == "english" else "🇰🇷"
-                        lang_text = "영문" if language == "english" else "한국어"
-
-                        # 플랫폼별 동적 메시지
-                        platform_messages = {
-                            "x": ["클릭 유도 훅 작성 중", "바이럴 포인트 추출 중", "리트윗 유도 문구 작성 중"],
-                            "instagram": ["감성적인 서사 구축 중", "스토리텔링 문단 작성 중", "공감 포인트 발굴 중"],
-                            "threads": ["팬 참여 질문 고민 중", "대화형 문구 작성 중", "댓글 유도 전략 수립 중"]
-                        }
-
-                        import random
-                        action = random.choice(platform_messages.get(platform, ["생성 중"]))
-
-                        with status_container:
-                            # 진행률 업데이트
-                            progress = 10 + int((completed_steps / total_steps) * 90)
-                            progress_bar.progress(progress)
-                            progress_text.text(f"✍️ {platform.upper()} {lang_text} - {action}... ({completed_steps + 1}/{total_steps})")
-
-                            # 플랫폼별 상태 업데이트
-                            if platform == "x":
-                                status_x.text(f"🐦 X (Twitter): {lang_emoji} {lang_text} 생성 중...")
-                            elif platform == "instagram":
-                                status_instagram.text(f"📸 Instagram: {lang_emoji} {lang_text} 생성 중...")
-                            elif platform == "threads":
-                                status_threads.text(f"🧵 Threads: {lang_emoji} {lang_text} 생성 중...")
-
-                    elif status == "completed":
-                        # JSON 파싱 에러 대비
-                        try:
-                            content = update.get("content", "")
-                            if not content:
-                                raise ValueError("빈 콘텐츠")
-
-                            st.session_state.generated_posts[platform][language] = content
-                            st.session_state.viral_scores[platform][language] = update.get("viral_score", 0)
-                            st.session_state.viral_reasons[platform][language] = update.get("viral_reason", "")
-                            completed_steps += 1
-                            platform_status[platform] += 1
-
-                            # 플랫폼별 상태 업데이트
-                            with status_container:
-                                if platform_status[platform] >= 2:  # 두 언어 모두 완료
-                                    if platform == "x":
-                                        status_x.text("🐦 X (Twitter): ✅ 완료")
-                                    elif platform == "instagram":
-                                        status_instagram.text("📸 Instagram: ✅ 완료")
-                                    elif platform == "threads":
-                                        status_threads.text("🧵 Threads: ✅ 완료")
-
-                        except (ValueError, KeyError, TypeError) as e:
-                            st.error(f"⚠️ JSON 파싱 오류 ({platform} - {language}): {str(e)}")
-                            continue
-
-            # 최종 결과 표시
-            with result_container:
+        # 결과 표시
+        with result_container:
                 st.divider()
                 st.markdown("## 📝 생성된 SNS 게시물")
 
