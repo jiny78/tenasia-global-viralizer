@@ -79,14 +79,27 @@ st.markdown("""
         }
 
         /* 입력 영역 풀 너비 */
-        .stTextInput, .stTextArea {
+        .stTextInput, .stTextArea, .stSelectbox {
             width: 100% !important;
         }
 
-        /* 버튼 풀 너비 */
+        /* 버튼 풀 너비 & 터치 영역 확대 */
         .stButton button {
             width: 100% !important;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
+            min-height: 3.5rem !important;
+            font-size: 1.05rem !important;
+            font-weight: 500;
+        }
+
+        /* File uploader 터치 영역 확대 */
+        .stFileUploader {
+            padding: 0.5rem 0;
+        }
+
+        /* Selectbox 터치 영역 확대 */
+        .stSelectbox > div > div {
+            min-height: 3rem !important;
         }
 
         /* 탭 텍스트 크기 조정 */
@@ -95,18 +108,24 @@ st.markdown("""
         }
 
         .stTabs [data-baseweb="tab"] {
-            font-size: 0.9rem;
-            padding: 0.5rem 0.75rem;
+            font-size: 0.95rem;
+            padding: 0.75rem 1rem;
         }
 
         /* 텍스트 영역 높이 조정 */
         .stTextArea textarea {
             min-height: 150px !important;
+            font-size: 1rem !important;
         }
 
         /* 컬럼 간격 줄이기 */
         .row-widget.stHorizontal {
             gap: 0.5rem;
+        }
+
+        /* Divider 간격 조정 */
+        hr {
+            margin: 1rem 0 !important;
         }
     }
 
@@ -216,32 +235,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ========================================
-# 상단: 스타일 선택 & 리셋 버튼
+# 상단: 스타일 선택
 # ========================================
 st.markdown("---")
-style_col, reset_col = st.columns([3, 1])
 
-with style_col:
-    content_style = st.selectbox(
-        "🎨 콘텐츠 스타일 선택",
-        options=["심층/분석", "감성/팬덤", "위트/밈", "심플/속보"],
-        format_func=lambda x: {
-            "심층/분석": "🖋️ 심층/분석 - 전문적이고 분석적인 톤",
-            "감성/팬덤": "💖 감성/팬덤 - 따뜻하고 공감하는 톤",
-            "위트/밈": "🤣 위트/밈 - 재치있고 유머러스한 톤",
-            "심플/속보": "⚡ 심플/속보 - 간결하고 임팩트있는 톤"
-        }[x],
-        help="생성될 SNS 게시물의 전반적인 스타일과 톤을 결정합니다"
-    )
-
-with reset_col:
-    st.write("")  # 버튼 위치 조정
-    st.write("")  # 버튼 위치 조정
-    if st.button("🔄 새로 시작", use_container_width=True, help="모든 입력과 결과를 초기화합니다"):
-        # 세션 상태 초기화
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
+content_style = st.selectbox(
+    "🎨 콘텐츠 스타일 선택",
+    options=["심층/분석", "감성/팬덤", "위트/밈", "심플/속보"],
+    format_func=lambda x: {
+        "심층/분석": "🖋️ 심층/분석 - 전문적이고 분석적인 톤",
+        "감성/팬덤": "💖 감성/팬덤 - 따뜻하고 공감하는 톤",
+        "위트/밈": "🤣 위트/밈 - 재치있고 유머러스한 톤",
+        "심플/속보": "⚡ 심플/속보 - 간결하고 임팩트있는 톤"
+    }[x],
+    help="생성될 SNS 게시물의 전반적인 스타일과 톤을 결정합니다"
+)
 
 st.markdown("---")
 
@@ -260,7 +268,13 @@ with col1:
         help="텐아시아 또는 한국경제 기사 URL을 입력하면 자동으로 출처와 내용을 추출합니다"
     )
 
-    extract_article_button = st.button("📰 Extract Article", type="secondary", use_container_width=True, key="extract_article_btn")
+    extract_and_generate_article = st.button(
+        "📰 기사 추출 & SNS 생성",
+        type="primary",
+        use_container_width=True,
+        key="extract_article_btn",
+        disabled=not article_url.strip()
+    )
 
     st.divider()
 
@@ -271,27 +285,34 @@ with col1:
     uploaded_video_file = st.file_uploader(
         "영상 파일 선택",
         type=["mp4", "mov", "avi", "mkv"],
-        help="영상 파일을 업로드하면 AI가 전체 영상을 분석하여 게시물을 생성합니다 (최대 200MB 권장)"
+        help="영상 파일을 업로드하면 AI가 전체 영상을 분석하여 게시물을 생성합니다 (최대 200MB 권장)",
+        key="video_uploader"
     )
 
+    # 업로드된 파일이 있으면 세션에 저장 (rerun 없이)
     if uploaded_video_file:
         st.success(f"✅ 파일 업로드 완료: {uploaded_video_file.name} ({uploaded_video_file.size / (1024*1024):.2f} MB)")
 
         # 업로드된 파일을 임시 파일로 저장
         import tempfile
-        temp_video_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4").name
-        with open(temp_video_path, "wb") as f:
-            f.write(uploaded_video_file.read())
+        if 'video_temp_path' not in st.session_state or st.session_state.get('video_filename') != uploaded_video_file.name:
+            temp_video_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4").name
+            with open(temp_video_path, "wb") as f:
+                f.write(uploaded_video_file.read())
 
-        # 세션 상태에 저장
-        st.session_state.youtube_video_path = temp_video_path
-        st.session_state.article_title = uploaded_video_file.name
-        st.session_state.article_content = f"업로드된 영상: {uploaded_video_file.name}"
-        st.session_state.site_name = "영상 업로드"
-        st.session_state.auto_generate = True
+            # 세션 상태에 저장
+            st.session_state.video_temp_path = temp_video_path
+            st.session_state.video_filename = uploaded_video_file.name
+            st.session_state.video_file_size = uploaded_video_file.size
 
-        st.info("💡 아래 Generate 버튼을 클릭하면 AI가 영상을 분석합니다")
-        st.rerun()
+    # 영상 분석 버튼 (업로드된 파일이 있을 때만 활성화)
+    analyze_video_button = st.button(
+        "🎥 영상 분석 & SNS 생성",
+        type="primary",
+        use_container_width=True,
+        key="analyze_video_btn",
+        disabled=uploaded_video_file is None
+    )
 
     st.divider()
 
@@ -314,69 +335,69 @@ with col1:
         key="content_input"
     )
 
-    # 분량 모드 선택
-    st.divider()
-    tone_mode = st.radio(
-        "📏 분량 모드",
-        options=["rich", "compact"],
-        format_func=lambda x: "📚 Rich (풍부하고 상세)" if x == "rich" else "⚡ Compact (간결하고 임팩트)",
-        horizontal=True,
-        help="Rich: Instagram 최소 3문단, Threads 300자 / Compact: Instagram 최소 2문단, Threads 200-250자"
+    generate_manual_button = st.button(
+        "🚀 SNS 게시물 생성",
+        type="primary",
+        use_container_width=True,
+        key="generate_manual_btn",
+        disabled=not article_content.strip()
     )
-
-    generate_button = st.button("🚀 Generate SNS Posts", type="primary", use_container_width=True)
 
 with col2:
     st.subheader("✨ 생성 결과")
 
-# 방법 1: Extract Article 버튼 클릭 시
-if extract_article_button:
-    if not article_url.strip():
+# tone_mode 기본값 설정 (분량 모드 제거했으므로 기본값 사용)
+tone_mode = "rich"
+
+# 버튼 처리: 각 방법별로 독립적으로 처리
+should_generate = False
+content_to_use = ""
+title_to_use = ""
+site_name_to_use = ""
+
+# 방법 1: 기사 추출 & 생성 버튼
+if extract_and_generate_article:
+    with col2:
+        st.info("🔍 기사를 추출하는 중...")
+
+    result = extract_article(article_url)
+
+    if result["success"]:
         with col1:
-            st.error("기사 URL을 입력해주세요!")
+            st.success(f"✅ 기사 추출 완료!")
+            st.info(f"**출처:** {result['site_name']}")
+            st.info(f"**제목:** {result['title'][:100]}...")
+
+        # 바로 생성 진행
+        should_generate = True
+        content_to_use = result['content']
+        title_to_use = result['title']
+        site_name_to_use = result['site_name']
     else:
-        # 오른쪽 결과 영역에 진행 상황 표시
+        with col1:
+            st.error(f"❌ 추출 실패: {result['error']}")
         with col2:
-            status_container = st.container()
-            with status_container:
-                st.info("🔍 기사를 추출하는 중...")
+            st.error(f"❌ 추출 실패: {result['error']}")
 
-        result = extract_article(article_url)
+# 방법 2: 영상 분석 & 생성 버튼
+elif analyze_video_button:
+    # 세션에서 비디오 경로 가져오기
+    video_path = st.session_state.get('video_temp_path')
+    video_filename = st.session_state.get('video_filename')
 
-        if result["success"]:
-            with col1:
-                st.success(f"✅ 기사 추출 완료!")
-                st.info(f"**출처:** {result['site_name']}")
-                st.info(f"**제목:** {result['title'][:100]}...")
+    if video_path:
+        should_generate = True
+        content_to_use = f"업로드된 영상: {video_filename}"
+        title_to_use = video_filename
+        site_name_to_use = "영상 업로드"
+        st.session_state.youtube_video_path = video_path  # 비디오 경로 설정
 
-            # 세션 상태 업데이트
-            st.session_state.article_title = result['title']
-            st.session_state.article_content = result['content']
-            st.session_state.site_name = result['site_name']
-            st.session_state.auto_generate = True  # 자동 생성 플래그 설정
-
-            # 페이지 새로고침
-            st.rerun()
-        else:
-            with col1:
-                st.error(f"❌ 추출 실패: {result['error']}")
-            with col2:
-                st.error(f"❌ 추출 실패: {result['error']}")
-
-# Generate 버튼 클릭 시 또는 자동 생성 플래그가 설정된 경우
-should_generate = generate_button or st.session_state.auto_generate
-
-# 자동 생성의 경우 세션 상태에서 직접 값 가져오기
-if st.session_state.auto_generate:
-    st.session_state.auto_generate = False
-    content_to_use = st.session_state.article_content
-    title_to_use = st.session_state.article_title
-    site_name_to_use = st.session_state.site_name
-else:
-    # 수동 생성의 경우 입력 필드 값 사용
+# 방법 3: 직접 입력 생성 버튼
+elif generate_manual_button:
+    should_generate = True
     content_to_use = article_content
     title_to_use = article_title
-    site_name_to_use = st.session_state.get('site_name', '해당 매체')
+    site_name_to_use = st.session_state.get('site_name', '직접 입력')
 
 # 생성 실행
 if should_generate and content_to_use.strip():
@@ -961,3 +982,23 @@ elif not should_generate and st.session_state.generated_posts:
         # 모델 정보
         if hasattr(st.session_state, 'model_name') and st.session_state.model_name:
             st.caption(f"🤖 Generated by: {st.session_state.model_name}")
+
+# ========================================
+# 맨 밑: 새로 시작 버튼
+# ========================================
+st.markdown("---")
+st.markdown("### 🔄 작업 초기화")
+
+reset_container = st.container()
+with reset_container:
+    col_info, col_btn = st.columns([2, 1])
+
+    with col_info:
+        st.caption("모든 입력과 결과를 초기화하고 처음부터 다시 시작합니다")
+
+    with col_btn:
+        if st.button("🔄 새로 시작", type="secondary", use_container_width=True, key="reset_all_btn"):
+            # 세션 상태 초기화
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
