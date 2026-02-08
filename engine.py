@@ -406,6 +406,17 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         {"platform": "x", "language": "english", "status": "completed", "content": "..."}
     """
     try:
+        # 변수 초기화 (NameError 방지)
+        video_frames = None  # 레거시 호환성
+
+        # 모드 판별 플래그
+        import os
+        is_video_mode = video_path is not None and os.path.exists(video_path)
+
+        print(f"\n{'='*70}")
+        print(f"🎯 분석 모드: {'YouTube 영상 전체 분석' if is_video_mode else '텍스트 기사 분석'}")
+        print(f"{'='*70}")
+
         # 안전 설정 및 생성 설정
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -425,7 +436,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 
         # 영상 파일 업로드 및 처리 대기
         uploaded_video_file = None
-        if video_path:
+        if is_video_mode:
             try:
                 import time
                 import os
@@ -464,12 +475,12 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
                         pass
                 raise Exception(f"영상 업로드 실패: {str(e)}")
 
-        # 비디오가 있으면 VIDEO_MODEL 사용, 없으면 ARTICLE_MODEL 사용
-        preferred_model = config.VIDEO_MODEL if video_path else config.ARTICLE_MODEL
+        # 비디오 모드면 VIDEO_MODEL, 기사 모드면 ARTICLE_MODEL 사용
+        preferred_model = config.VIDEO_MODEL if is_video_mode else config.ARTICLE_MODEL
 
         # 최적 모델 자동 선택
         print(f"\n{'='*70}")
-        print(f"🎬 컨텐츠 타입: {'YouTube 영상 전체 분석' if video_path else '텍스트 기사 분석'}")
+        print(f"🎬 컨텐츠 타입: {'YouTube 영상 전체 분석' if is_video_mode else '텍스트 기사 분석'}")
         print(f"{'='*70}")
 
         model_name, selection_reason = get_best_available_model(
@@ -520,8 +531,9 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
             "한국경제": "hankyung"
         }.get(site_name, site_name)
 
-        # YouTube 영상이 있을 경우 멀티모달 프롬프트
-        if video_path:
+        # 모드별 콘텐츠 정보 구성 (엄격하게 분리)
+        if is_video_mode:
+            # YouTube 영상 모드
             article_info = f"""
 영상 제목: {article_title}
 
@@ -537,16 +549,16 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 
 영상을 충분히 감상한 후, 텐아시아 독자들의 관심을 끌 수 있는 매력적인 SNS 카피와 정확한 바이럴 점수를 생성하세요.
 """
+            content_type = "영상"
         else:
+            # 기사 모드
             article_info = f"""
 기사 제목: {article_title}
 
 기사 내용:
 {article_text}
 """
-
-        # 통합 프롬프트: 한 번의 API 호출로 모든 플랫폼/언어 조합 생성
-        content_type = "영상" if video_path else "기사"
+            content_type = "기사"
         unified_prompt = f"""당신은 {site_name}의 수석 글로벌 SNS 에디터입니다.
 아래 {content_type}를 바탕으로 3개 플랫폼(X, Instagram, Threads) x 2개 언어(English, Korean) = 총 6개의 SNS 게시물을 생성하세요.
 
@@ -562,7 +574,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 ✓ **품격 유지**: {site_name}의 브랜드 이미지에 맞는 고급스럽고 전문적인 어휘를 사용했는가?
 ✓ **자연스러운 현지화**: 번역투가 아닌, 해당 언어권의 인플루언서가 작성한 것 같은 자연스러운 표현인가?
 
-{"✓ **비주얼 반영**: 영상의 비주얼 요소(색감, 분위기, 액션)를 게시물에 반영했는가?" if video_path else ""}
+{"✓ **비주얼 반영**: 영상의 비주얼 요소(색감, 분위기, 액션)를 게시물에 반영했는가?" if is_video_mode else ""}
 
 각 게시물마다 위 기준으로 1-10점의 review_score를 매기세요.
 
@@ -762,8 +774,8 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
                 "error": error
             })
 
-        # YouTube 영상이 있을 경우 멀티모달 콘텐츠 구성
-        if video_path and uploaded_video_file:
+        # YouTube 영상 모드일 경우 멀티모달 콘텐츠 구성
+        if is_video_mode and uploaded_video_file:
             # 프롬프트와 업로드된 영상 파일을 함께 전달
             content_parts = [
                 unified_prompt,
@@ -887,8 +899,8 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         yield {"platform": "error", "status": "error", "error": error_details}
 
     finally:
-        # 클린업: Google Cloud와 로컬의 임시 파일 삭제
-        if video_path:
+        # 클린업: Google Cloud와 로컬의 임시 파일 삭제 (영상 모드일 때만)
+        if is_video_mode and video_path:
             print(f"\n{'='*70}")
             print(f"🧹 클린업 시작...")
 
