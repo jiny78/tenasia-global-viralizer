@@ -236,7 +236,7 @@ def extract_frame_from_video(video_path: str, frame_position: int, skip_retry: b
         cap.release()
 
 
-def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> List[Image.Image]:
+def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> tuple[List[Image.Image], str]:
     """
     YouTube URL에서 프레임을 추출합니다.
     yt-dlp로 가장 낮은 화질의 영상을 다운로드하고 OpenCV로 프레임을 추출합니다.
@@ -345,19 +345,21 @@ def extract_frames_from_youtube(youtube_url: str, num_frames: int = None) -> Lis
             print(f"   → 추출된 프레임으로 분석을 진행합니다\n")
 
         print(f"✅ 총 {len(frames)}개 프레임 추출 완료!")
-        return frames
+        print(f"📦 영상 파일 보관: {video_path}")
+        print(f"   (Gemini 분석 후 자동 삭제됩니다)\n")
+
+        # 프레임 리스트와 비디오 파일 경로를 함께 반환
+        return frames, video_path
 
     except Exception as e:
-        raise Exception(f"프레임 추출 중 오류 발생: {str(e)}")
-
-    finally:
-        # 6. 임시 비디오 파일 삭제
+        # 에러 발생 시 비디오 파일 삭제
         if video_path and os.path.exists(video_path):
             try:
                 os.remove(video_path)
-                print(f"🔒 임시 비디오 파일 삭제 완료")
-            except Exception as e:
-                print(f"⚠️  임시 파일 삭제 실패: {str(e)}")
+                print(f"🔒 에러로 인한 임시 파일 삭제")
+            except:
+                pass
+        raise Exception(f"프레임 추출 중 오류 발생: {str(e)}")
 
 
 def get_youtube_metadata(youtube_url: str) -> Dict[str, any]:

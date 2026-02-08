@@ -163,6 +163,8 @@ if 'generation_status' not in st.session_state:
     }
 if 'youtube_frames' not in st.session_state:
     st.session_state.youtube_frames = None
+if 'youtube_video_path' not in st.session_state:
+    st.session_state.youtube_video_path = None
 
 # 타이틀
 st.title("🌐 Global Viralizer")
@@ -326,9 +328,9 @@ if extract_youtube_button:
                 st.info(f"**제목:** {metadata['title'][:100]}...")
                 st.info(f"**길이:** {metadata['duration']}초")
 
-            # 프레임 추출
-            progress_details.text("🎞️ 프레임 추출 중...")
-            frames = extract_frames_from_youtube(youtube_url, num_frames=10)
+            # 프레임 추출 (미리보기용 + Gemini 분석용 비디오 파일)
+            progress_details.text("🎞️ 프레임 추출 및 영상 다운로드 중...")
+            frames, video_path = extract_frames_from_youtube(youtube_url, num_frames=10)
 
             with col1:
                 st.success(f"✅ {len(frames)}개 프레임 추출 완료!")
@@ -367,7 +369,8 @@ if extract_youtube_button:
             st.session_state.article_title = metadata['title']
             st.session_state.article_content = youtube_content
             st.session_state.site_name = "YouTube"
-            st.session_state.youtube_frames = frames  # 프레임 저장
+            st.session_state.youtube_frames = frames  # 프레임 저장 (미리보기용)
+            st.session_state.youtube_video_path = video_path  # 비디오 파일 경로 (Gemini 분석용)
             st.session_state.auto_generate = True  # 자동 생성 플래그 설정
 
             with col2:
@@ -512,11 +515,11 @@ if should_generate and content_to_use.strip():
             completed_steps = 0
             platform_status = {"x": 0, "instagram": 0, "threads": 0}  # 0: pending, 1: generating, 2: completed
 
-            # 유튜브 프레임이 있으면 함께 전달
-            video_frames = st.session_state.get('youtube_frames', None)
+            # 유튜브 영상 파일 경로 가져오기
+            video_path = st.session_state.get('youtube_video_path', None)
 
             # 스트리밍 방식으로 생성
-            for update in generate_sns_posts_streaming(content_to_use, title_to_use, site_name_to_use, video_frames):
+            for update in generate_sns_posts_streaming(content_to_use, title_to_use, site_name_to_use, video_path):
                 platform = update.get("platform")
                 status = update.get("status")
                 language = update.get("language")

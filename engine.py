@@ -390,16 +390,16 @@ def retry_with_exponential_backoff(func, max_retries=None, progress_callback=Non
         raise last_exception
 
 
-def generate_sns_posts_streaming(article_text: str, article_title: str = "", site_name: str = "해당 매체", video_frames=None):
+def generate_sns_posts_streaming(article_text: str, article_title: str = "", site_name: str = "해당 매체", video_path=None):
     """
-    한국어 기사 또는 비디오 프레임을 받아 English와 Korean 버전의 SNS 게시물을 스트리밍 방식으로 생성합니다.
+    한국어 기사 또는 YouTube 영상을 받아 English와 Korean 버전의 SNS 게시물을 스트리밍 방식으로 생성합니다.
     단 한 번의 API 호출로 모든 플랫폼/언어 조합의 게시물을 JSON 형식으로 받아옵니다.
 
     Args:
         article_text: 한국어 기사 내용
         article_title: 한국어 기사 제목 (선택)
         site_name: 출처 사이트 이름 (선택, 기본값: "해당 매체")
-        video_frames: 비디오 프레임 리스트 (PIL.Image 객체, 선택)
+        video_path: YouTube 영상 파일 경로 (선택, 제공 시 Google AI에 업로드됨)
 
     Yields:
         각 플랫폼/언어별 결과를 담은 딕셔너리
@@ -423,12 +423,53 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
             "response_schema": RESPONSE_SCHEMA,  # JSON 스키마 정의
         }
 
-        # 비디오 프레임이 있으면 VIDEO_MODEL 사용, 없으면 ARTICLE_MODEL 사용
-        preferred_model = config.VIDEO_MODEL if video_frames else config.ARTICLE_MODEL
+        # 영상 파일 업로드 및 처리 대기
+        uploaded_video_file = None
+        if video_path:
+            try:
+                import time
+                import os
+
+                print(f"\n{'='*70}")
+                print(f"📤 Google AI 서버에 영상 업로드 중...")
+                print(f"   파일: {video_path}")
+                print(f"   크기: {os.path.getsize(video_path) / (1024*1024):.2f} MB")
+                print(f"{'='*70}")
+
+                # Google AI에 파일 업로드
+                uploaded_video_file = genai.upload_file(path=video_path)
+                print(f"✅ 업로드 완료!")
+                print(f"   파일 이름: {uploaded_video_file.name}")
+                print(f"   URI: {uploaded_video_file.uri}")
+
+                # 영상 처리 완료 대기 (ACTIVE 상태까지)
+                print(f"\n⏳ 영상 처리 중...")
+                while uploaded_video_file.state.name == "PROCESSING":
+                    print(f"   상태: {uploaded_video_file.state.name} - 대기 중...", end="\r")
+                    time.sleep(2)
+                    uploaded_video_file = genai.get_file(uploaded_video_file.name)
+
+                if uploaded_video_file.state.name == "FAILED":
+                    raise Exception(f"영상 처리 실패: {uploaded_video_file.state.name}")
+
+                print(f"✅ 영상 처리 완료! 상태: {uploaded_video_file.state.name}")
+                print(f"{'='*70}\n")
+
+            except Exception as e:
+                # 업로드 실패 시 클린업
+                if uploaded_video_file:
+                    try:
+                        genai.delete_file(uploaded_video_file.name)
+                    except:
+                        pass
+                raise Exception(f"영상 업로드 실패: {str(e)}")
+
+        # 비디오가 있으면 VIDEO_MODEL 사용, 없으면 ARTICLE_MODEL 사용
+        preferred_model = config.VIDEO_MODEL if video_path else config.ARTICLE_MODEL
 
         # 최적 모델 자동 선택
         print(f"\n{'='*70}")
-        print(f"🎬 컨텐츠 타입: {'비디오 프레임 분석' if video_frames else '텍스트 기사 분석'}")
+        print(f"🎬 컨텐츠 타입: {'YouTube 영상 전체 분석' if video_path else '텍스트 기사 분석'}")
         print(f"{'='*70}")
 
         model_name, selection_reason = get_best_available_model(
@@ -479,16 +520,22 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
             "한국경제": "hankyung"
         }.get(site_name, site_name)
 
-        # 비디오 프레임이 있을 경우 멀티모달 프롬프트
-        if video_frames:
+        # YouTube 영상이 있을 경우 멀티모달 프롬프트
+        if video_path:
             article_info = f"""
 영상 제목: {article_title}
 
-영상 정보:
+영상 메타데이터:
 {article_text}
 
-📹 제공된 프레임: {len(video_frames)}개의 영상 프레임이 아래에 포함되어 있습니다.
-이 프레임들을 분석하여 영상의 핵심 내용, 분위기, 비주얼 요소를 파악하고 SNS 게시물에 반영하세요.
+🎬 **중요 지시사항:**
+이 영상을 처음부터 끝까지 전체적으로 감상하고 분석하세요.
+- 영상의 핵심 메시지와 스토리라인 파악
+- 비주얼 요소 (색감, 분위기, 영상미) 분석
+- 감정적 임팩트와 바이럴 포인트 식별
+- 텐아시아 독자들(K-POP, 엔터테인먼트 관심층)이 좋아할 만한 요소 강조
+
+영상을 충분히 감상한 후, 텐아시아 독자들의 관심을 끌 수 있는 매력적인 SNS 카피와 정확한 바이럴 점수를 생성하세요.
 """
         else:
             article_info = f"""
@@ -499,7 +546,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 """
 
         # 통합 프롬프트: 한 번의 API 호출로 모든 플랫폼/언어 조합 생성
-        content_type = "영상" if video_frames else "기사"
+        content_type = "영상" if video_path else "기사"
         unified_prompt = f"""당신은 {site_name}의 수석 글로벌 SNS 에디터입니다.
 아래 {content_type}를 바탕으로 3개 플랫폼(X, Instagram, Threads) x 2개 언어(English, Korean) = 총 6개의 SNS 게시물을 생성하세요.
 
@@ -715,14 +762,16 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
                 "error": error
             })
 
-        # 비디오 프레임이 있을 경우 멀티모달 콘텐츠 구성
-        if video_frames:
-            # 프롬프트와 프레임 이미지를 함께 전달
-            content_parts = [unified_prompt]
+        # YouTube 영상이 있을 경우 멀티모달 콘텐츠 구성
+        if video_path and uploaded_video_file:
+            # 프롬프트와 업로드된 영상 파일을 함께 전달
+            content_parts = [
+                unified_prompt,
+                uploaded_video_file  # Google AI에 업로드된 영상 파일
+            ]
 
-            # 프레임 이미지 추가 (최대 10개)
-            for i, frame in enumerate(video_frames[:10]):
-                content_parts.append(frame)
+            print(f"\n🤖 Gemini가 영상을 전체적으로 감상하는 중...")
+            print(f"   이 과정은 영상 길이에 따라 시간이 걸릴 수 있습니다.\n")
 
             # 안전한 API 호출 (Exponential Backoff 포함)
             response = safe_generate_content(
@@ -836,6 +885,31 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
         import traceback
         error_details = f"{str(e)}\n\nTraceback:\n{traceback.format_exc()}"
         yield {"platform": "error", "status": "error", "error": error_details}
+
+    finally:
+        # 클린업: Google Cloud와 로컬의 임시 파일 삭제
+        if video_path:
+            print(f"\n{'='*70}")
+            print(f"🧹 클린업 시작...")
+
+            # 1. Google AI 서버의 파일 삭제
+            if uploaded_video_file:
+                try:
+                    genai.delete_file(uploaded_video_file.name)
+                    print(f"✅ Google Cloud 파일 삭제 완료: {uploaded_video_file.name}")
+                except Exception as e:
+                    print(f"⚠️  Google Cloud 파일 삭제 실패: {str(e)}")
+
+            # 2. 로컬 임시 파일 삭제
+            if os.path.exists(video_path):
+                try:
+                    os.remove(video_path)
+                    print(f"✅ 로컬 임시 파일 삭제 완료: {video_path}")
+                except Exception as e:
+                    print(f"⚠️  로컬 파일 삭제 실패: {str(e)}")
+
+            print(f"✅ 클린업 완료!")
+            print(f"{'='*70}\n")
 
 
 def generate_sns_posts(article_text: str, article_title: str = "") -> dict:
