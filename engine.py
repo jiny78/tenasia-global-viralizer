@@ -562,7 +562,7 @@ def generate_sns_posts_streaming(article_text: str, article_title: str = "", sit
 ✓ **품격 유지**: {site_name}의 브랜드 이미지에 맞는 고급스럽고 전문적인 어휘를 사용했는가?
 ✓ **자연스러운 현지화**: 번역투가 아닌, 해당 언어권의 인플루언서가 작성한 것 같은 자연스러운 표현인가?
 
-{"✓ **비주얼 반영**: 제공된 프레임의 비주얼 요소(색감, 분위기, 액션)를 게시물에 반영했는가?" if video_frames else ""}
+{"✓ **비주얼 반영**: 영상의 비주얼 요소(색감, 분위기, 액션)를 게시물에 반영했는가?" if video_path else ""}
 
 각 게시물마다 위 기준으로 1-10점의 review_score를 매기세요.
 
